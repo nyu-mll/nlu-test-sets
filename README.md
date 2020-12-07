@@ -27,7 +27,7 @@ To run the same analysis for new test set(s), first you would need to train each
 
 ### Fitting an IRT model
 
-After obtaining the model responses for each test set, add them into the `data` folder. After that, edit the `irt_scripts/estimate_irt_params.sh` by adding the new test sets into `TASKS` list. You also need to modify the `PATH` so that it will refer to your working directory.
+After obtaining the model responses for each test set, add them into the `data` folder. After that, edit the `irt_scripts/estimate_irt_params.sh` by adding the new test sets into `TASKS` list. You also need to modify the `BASE_DIR` and `SCRIPT_DIR` so that it will refer to your working directory.
 
 You can use the following command to estimate parameters:
 ```

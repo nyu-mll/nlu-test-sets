@@ -4,7 +4,7 @@ This is a repository for the paper "Quoref is Still Effective, SNLI is Not: Comp
 
 ## Requirements
 
-For generating new model responses using `jiant` (we use v2.1.1), please refer to the [documentation](https://github.com/nyu-mll/jiant/tree/v2.1.1).
+For training the models and generating new model responses using `jiant` (we use v2.1.1), please refer to the related [README](https://github.com/nyu-mll/nlu-test-sets/blob/main/README_models.md).
 
 For IRT analysis, we use the following packages:
 - pyro-api==0.1.2
@@ -27,7 +27,7 @@ To run the same analysis for new test set(s), first you would need to train each
 
 ### Fitting an IRT model
 
-After obtaining the model responses for each test set, add them into the `data` folder. After that, edit the `irt_scripts/estimate_irt_params.sh` by adding the new test sets into `TASKS` list. You also need to modify the `BASE_DIR` and `SCRIPT_DIR` so that it will refer to your working directory.
+After obtaining the model responses for each test set, add them into the `data` folder. After that, edit the `irt_scripts/estimate_irt_params.sh` by adding the new test sets into `TASKS` list. You also need to modify the `PATH` so that it will refer to your working directory.
 
 You can use the following command to estimate parameters:
 ```

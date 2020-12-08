@@ -80,18 +80,34 @@ source jiant/irt_scripts/taskmaster_hyperparemters.sh
 tune_hyperparameters $MODEL_TYPE $TASKMASTER_TASKS
 ```
 
+## Training a model on all tasks using our best config
+The scripts for model training is in `jiant/irt_scripts/training_scripts.sh`. We performed the hyperparameter tuning using `roberta-large` model to find the best training config for each task. To train the models using our best config.
+```
+source jiant/irt_scripts/training_scripts.sh
+
+MODEL_TYPE=roberta-large
+train_best_configs $MODEL_TYPE
+```
+
 ## Training a model
-To train the model using our best hyperparameter config, run:
+To train an individual model, run:
 ```
 source jiant/irt_scripts/taskmaster_hyperparemters.sh
-bash train_all_models $MODEL_TYPE $DATASET
+run_training $MODEL_TYPE $DATASET $CONFIG_NO
 ```
+
 
 ## Generating Responses
 To generate responses on a dataset using all the models, run:
 ```
-python jiant/irt_scripts/call_predict.py $MODEL_TYPE $DATASET
+python jiant/irt_scripts/call_predict.py $MODEL_TYPE $DATASET $(pwd)
 ```
-Make sure to change the `output path` in `jiant/irt_scripts/call_predict.py`.
+This will generate predictions and responder accuracies.
+
+## Creating csv for IRT model
+To combine the generated responses into csv file (which will be used as input to IRT model), run
+```
+python jiant/irt_scripts/postprocess_predictions.py $(pwd)
+```
 
 

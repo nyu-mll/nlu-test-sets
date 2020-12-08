@@ -51,7 +51,7 @@ Please email `c.vania at nyu dot edu` for custom datasets used in our project.
 ## Preparing datasets
 
 - We train each model on *28 datasets* listed in the paper. 
-- First, copy the `configs.zip` from here and unzip it under `/path/to/jiant_exp/experiments/tasks`
+- First, copy the `configs.zip` from [here](https://github.com/nyu-mll/nlu-test-sets/tree/main/jiant_task_data) and unzip it under `/path/to/jiant_exp/experiments/tasks`
 - We need to change the data paths in all the configs to your `jiant` directory (current working directory). To do this, run:
 ```
 find ./experiments/tasks/configs/ -type f -exec sed -i -e 's/pathto/$(pwd)/g' {} \;

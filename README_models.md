@@ -46,12 +46,18 @@ download_model $MODEL_TYPE
 ```
 
 ## Downloading datasets
-TBA
+Please email `c.vania at nyu dot edu` for custom datasets used in our project.
 
 ## Preparing datasets
 
 - We train each model on *28 datasets* listed in the paper. 
-- First, we need to tokenize and cache the tokenized data. The script for preprocessing is in `jiant/irt_scripts/run_preprocess.sh`.
+- First, copy the `configs.zip` from here and unzip it under `/path/to/jiant_exp/experiments/tasks`
+- We need to change the data paths in all the configs to your `jiant` directory (current working directory). To do this, run:
+```
+find ./experiments/tasks/configs/ -type f -exec sed -i -e 's/pathto/$(pwd)/g' {} \;
+```
+
+- We need to tokenize and cache the tokenized data. The script for preprocessing is in `jiant/irt_scripts/run_preprocess.sh`.
 
 - To preprocess all 28 datasets using a model, run:
 ```

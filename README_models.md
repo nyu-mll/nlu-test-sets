@@ -29,31 +29,42 @@ export PYTHONPATH=/path/to/jiant_exp/jiant:$PYTHONPATH
 
 ## Downloading models
 
-We first need to download and cache the models from Huggingface. To download all 18 models used in our experiment, run:
+We first need to download and cache the models from Huggingface. We will save our models and caches in `/path/to/jiant_exp/experiments` folder. To download all 18 models used in our experiment, run:
 
 ```
-bash jiant/irt_scripts/download_all_models.sh
+mkdir -p experiments
+source jiant/irt_scripts/download_all_models.sh $(pwd)
+download_all_models
 ```
 
 You can also download individual models using the `download_models.sh` script. For example, to download the `roberta-large` model:
 
 ```
 MODEL_TYPE=roberta-large
-bash jiant/irt_scripts/download_models.sh $MODEL_TYPE
+source jiant/irt_scripts/download_all_models.sh $(pwd)
+download_model $MODEL_TYPE
 ```
+
 ## Downloading datasets
 TBA
 
 ## Preparing datasets
 
 - We train each model on *28 datasets* listed in the paper. 
-- First, we need to tokenize and cache the tokenized data.
+- First, we need to tokenize and cache the tokenized data. The script for preprocessing is in `jiant/irt_scripts/run_preprocess.sh`.
+
+- To preprocess all 28 datasets using a model, run:
 ```
-bash jiant/irt_scripts/run_preprocess.sh $MODEL_TYPE $DATASET
+source jiant/irt_scripts/run_preprocess.sh
+
+MODEL_TYPE=roberta-large
+prepare_all_tasks $MODEL_TYPE
 ```
+To preprocess individual datasets, use `preprocess_task` function from `jiant/irt_scripts/run_preprocess.sh`.
 For example, to preprocess `copa` using `roberta-large` tokenizer, run:
 ```
-bash jiant/irt_scripts/run_preprocess.sh roberta-large copa
+source jiant/irt_scripts/run_preprocess.sh
+preprocess_task roberta-large copa
 ```
 
 ## Hyperparameter Tuning

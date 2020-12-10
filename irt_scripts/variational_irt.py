@@ -25,6 +25,34 @@ def irt_model(
     theta_transform=lambda x: x,
     item_params_std=1.0,
 ):
+    '''
+    3 parameter IRT model used for stochastic variational inference. The model is defined by the
+    distributions of the 3 item parameters (discrimination [a], difficulty [b], and
+    guessing [g]) and ability parameter [t].
+
+    The difficuly and log-guessing parameters follow Gaussian distributions with mean 0 and
+    standard deviation `item_params_std`. Discrimination and ability parameters follow distributions
+    defined by `alpha_dist` and `theta_dist`, respectively, followed by a transformation defined by
+    `alpha_transform` and `theta_transform`, respectively.
+
+    Args:
+        obs:             Numpy array of item responses.
+        alpha_dist:      {`name`: distribution_name, `param`: distribution_dict}
+                         Dictionary for the distribution type for the discrimation parameter [alpha].
+                         distribution_dict is a dictionary of distribution parameters necessary for the
+                         parameteric distribution defined by distribution_name.
+        theta_dist:      {`name`: distribution_name, `param`: distribution_dict}
+                         Dictionary for the distribution type for the ability parameter [theta].
+                         distribution_dict is a dictionary of distribution parameters necessary for the
+                         parameteric distribution defined by distribution_name.
+        alpha_transform: Transformation applied to the discrimination parameter [alpha].
+        theta_transform: Transformation aplied to the ability parameter [theta].
+        item_params_std: Standard deviation for difficulty and guessing parameters.
+
+    Returns:
+        lik:             the log-likelihood of item responses from obs given the
+                         estimated parameters.
+    '''
     n_models, n_items = obs.shape[0], obs.shape[1]
 
     betas = pyro.sample("b", dist.Normal(torch.zeros(n_items), item_params_std))
@@ -86,7 +114,7 @@ def irt_model(
         raise TypeError(f"theta distribution {theta_dist['name']} not supported.")
 
     alphas = alpha_transform(alphas)
-    tehtas = theta_transform(thetas)
+    thetas = theta_transform(thetas)
 
     lik = pyro.sample(
         "likelihood",
@@ -102,6 +130,23 @@ def irt_model(
 
 
 def vi_posterior(obs, alpha_dist, theta_dist):
+    '''
+    3 parameter IRT guide used for stochastic variational inference in Pyro.
+
+    Difficulty [b] and log-guessing [log c] follow Gaussian distributions. Discrimination [a] and
+    ability [theta] follow distributions defined by `alpha_dist` and `theta_dist`, respectively.
+
+    Args:
+        obs:             Numpy array of item responses.
+        alpha_dist:      {`name`: distribution_name, `param`: distribution_dict}
+                         Dictionary for the distribution type for the discrimation parameter [alpha].
+                         distribution_dict is a dictionary of distribution parameters necessary for the
+                         parameteric distribution defined by distribution_name.
+        theta_dist:      {`name`: distribution_name, `param`: distribution_dict}
+                         Dictionary for the distribution type for the ability parameter [theta].
+                         distribution_dict is a dictionary of distribution parameters necessary for the
+                         parameteric distribution defined by distribution_name.
+    '''
     n_models, n_items = obs.shape[0], obs.shape[1]
 
     pyro.sample(
@@ -207,6 +252,29 @@ def vi_posterior(obs, alpha_dist, theta_dist):
 def get_model_guide(
     alpha_dist, theta_dist, alpha_transform, theta_transform, item_param_std
 ):
+    '''
+    Method to define 3 parameter IRT model and guide given specifications for item discrimination [alpha]
+    and responder ability [theta] parameter distributions and transfomations and standard deviations for item
+    difficulty [beta] and log-guessing [log gamma] Gaussian distributions.
+
+    Args:
+        alpha_dist:      {`name`: distribution_name, `param`: distribution_dict}
+                         Dictionary for the distribution type for the discrimation parameter [alpha].
+                         distribution_dict is a dictionary of distribution parameters necessary for the
+                         parameteric distribution defined by distribution_name.
+        theta_dist:      {`name`: distribution_name, `param`: distribution_dict}
+                         Dictionary for the distribution type for the ability parameter [theta].
+                         distribution_dict is a dictionary of distribution parameters necessary for the
+                         parameteric distribution defined by distribution_name.
+        alpha_transform: Transformation applied to the discrimination parameter [alpha].
+        theta_transform: Transformation aplied to the ability parameter [theta].
+        item_params_std: Standard deviation for difficulty and guessing parameters.
+
+    Returns:
+        model:           3 parameter IRT model used for stochastic variation inference in Pyro
+        guide:           3 parameter IRT guide used for stochastic variation inference in Pyro
+
+    '''
     model = lambda obs: irt_model(
         obs,
         alpha_dist,
@@ -221,11 +289,26 @@ def get_model_guide(
 
 
 def train(model, guide, data, optimizer, n_steps=500, weights=1):
+    '''
+    Method to fit 3 parameter IRT model parameters using stochastic variational inference.
+
+    The method uses a weighted ELBO, where each item parameter's log-likelihood is weighted by the
+    inverse of the item's dataset size. Use the default `weights=1` to use the standard ELBO.
+
+    Args:
+        model:      3 parameter IRT model
+        guide:      3 parameter IRT guide
+        data:       Numpy array of item responses
+        optimizer:  Optimizer to use for stochastic variational inference
+        n_steps:    Number of steps for fitting
+        weights:    Weights to use for the weighted ELBO
+
+    Returns:
+        loss_track: List of weighted ELBO losses during the parameter fitting
+    '''
     pyro.clear_param_store()
 
-    # svi_kernel = pyro.infer.SVI(model, guide, optimizer, loss=pyro.infer.Trace_ELBO())
     svi_kernel = WeightedSVI(model, guide, optimizer, loss=Weighted_Trace_ELBO())
-    # svi_kernel = WeightedSVI(model, guide, optimizer, loss=pyro.infer.Trace_ELBO, loss_and_grads=None)
     loss_track = []
 
     # do gradient steps
@@ -233,7 +316,6 @@ def train(model, guide, data, optimizer, n_steps=500, weights=1):
     t = tqdm(range(n_steps), desc="elbo loss", miniters=1, disable=False)
     for step in t:
         elbo_loss = svi_kernel.step(weights, data_)
-        # elbo_loss = svi_kernel.step(data_)
         t.set_description(f"elbo loss = {elbo_loss:.2f}")
         loss_track.append(elbo_loss)
 
@@ -346,10 +428,12 @@ def main(args):
         verbose=args.verbose,
     )
 
+    # Set weights for weighted ELBO
     if args.no_subsample:
         weights = sum([[1 / n] * n for n in n_items], [])
     else:
         weights = 1
+
     # Sample items
     min_items = min(n_items) if args.sample_size == -1 else args.sample_size
     combined_responses = subsample_responses(
@@ -396,6 +480,7 @@ def main(args):
         weights=weights,
     )
 
+    # Save parameters and sampled responses
     if args.no_subsample:
         exp_name = f"alpha-{args.discr}-{args.discr_transform}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
     else:

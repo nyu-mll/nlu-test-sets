@@ -84,7 +84,7 @@ preprocess_task roberta-large copa
 ### Hyperparameter Tuning
 You can skip this step if you don't want to perform hyperparmeter tuning. If you are adding a new dataset, you need to declare the training size in `jiant/irt_scripts/taskmaster_hyperparmeters.sh`.
 ```
-source jiant/irt_scripts/taskmaster_hyperparmeters.sh
+source jiant/irt_scripts/training_scripts.sh
 tune_hyperparameters $MODEL_TYPE $TASKMASTER_TASKS
 ```
 

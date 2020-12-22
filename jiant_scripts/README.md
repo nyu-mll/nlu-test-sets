@@ -113,8 +113,8 @@ python jiant/irt_scripts/call_predict.py $MODEL_TYPE $DATASET $(pwd)
 This will generate predictions and responder accuracies.
 
 
-## Creating csv for IRT model
-To combine the generated responses into a csv file (which will be used as input to IRT model), run
+## Creating a .csv for IRT analysis
+To combine the generated responses into a csv file (which will be used as an input for IRT analysis), run
 ```
 python jiant/irt_scripts/postprocess_predictions.py $(pwd)
 ```

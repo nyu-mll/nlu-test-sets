@@ -1,4 +1,4 @@
-# nlu-test-sets
+# Comparing Test Sets with IRT
 
 This is a repository for the paper "Quoref is Still Effective, SNLI is Not: Comparing Test Sets with Item Response Theory".
 

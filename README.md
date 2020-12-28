@@ -6,11 +6,13 @@ This is a repository for the paper "Quoref is Still Effective, SNLI is Not: Comp
 
 For training the models and generating new model responses using `jiant` (we use v2.1.1), please refer to the related [README](https://github.com/nyu-mll/nlu-test-sets/blob/main/README_models.md).
 
-For IRT analysis, we use the following packages:
-- pyro-api==0.1.2
-- pyro-ppl==1.4.0
-- matplotlib==3.2.2
-- seaborn==0.11.0
+For IRT analysis, use Python 3 (we use Python 3.7) and install the required packages.
+
+```
+git clone https://github.com/nyu-mll/nlu-test-sets.git
+cd nlu-test-sets
+pip install -r requirements.txt
+```
 
 
 ## IRT Analysis

@@ -1,5 +1,5 @@
-# BASE_DIR=/Users/phumon/Documents/Research/
-BASE_DIR=//Users/claravania/Projects
+BASE_DIR=/Users/phumon/Documents/Research/
+# BASE_DIR=//Users/claravania/Projects
 # BASE_DIR=/scratch/wh629/research/irt/irt_script
 SCRIPT_DIR=${BASE_DIR}/nlu-test-sets/irt_scripts
 

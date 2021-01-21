@@ -125,7 +125,7 @@ def irt_model(
         ),
         obs=obs,
     )
-
+    import pdb; pdb.set_trace()
     return lik
 
 

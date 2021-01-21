@@ -41,12 +41,14 @@ class Weighted_Trace_ELBO(ELBO):
 
         obs_weights = torch.Tensor(obs_weights)
         # compute elbo and surrogate elbo
+
         for name, site in model_trace.nodes.items():
             if site["type"] == "sample":
                 if name != "theta":
                     weights = obs_weights
                 else:
                     weights = 1.0
+
 
                 elbo_particle = elbo_particle + torch_item(
                     scale_and_mask(site["log_prob"], weights).sum()

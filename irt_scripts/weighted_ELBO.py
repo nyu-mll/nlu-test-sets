@@ -46,10 +46,13 @@ class Weighted_Trace_ELBO(ELBO):
             if site["type"] == "sample":
                 if name != "theta":
                     weights = obs_weights
+                    if len(site["log_prob"].size()) > 1:
+                        if site["log_prob"].size(0) == obs_weights.size(0):
+                            weights = weights.unsqueeze(1)
+                        else:
+                            weights = weights.unsqueeze(0)
                 else:
                     weights = 1.0
-
-
                 elbo_particle = elbo_particle + torch_item(
                     scale_and_mask(site["log_prob"], weights).sum()
                 )
@@ -64,6 +67,8 @@ class Weighted_Trace_ELBO(ELBO):
 
                 if name != "theta":
                     weights = obs_weights
+                    if len(site["log_prob"].size()) > 1:
+                        weights = weights.unsqueeze(1)
                 else:
                     weights = 1.0
 

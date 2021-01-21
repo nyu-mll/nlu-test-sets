@@ -24,6 +24,7 @@ def irt_model(
     alpha_transform=lambda x: x,
     theta_transform=lambda x: x,
     item_params_std=1.0,
+    dimension = 1
 ):
     '''
     3 parameter IRT model used for stochastic variational inference. The model is defined by the
@@ -55,7 +56,7 @@ def irt_model(
     '''
     n_models, n_items = obs.shape[0], obs.shape[1]
 
-    betas = pyro.sample("b", dist.Normal(torch.zeros(n_items,3), item_params_std))
+    betas = pyro.sample("b", dist.Normal(torch.zeros(n_items, dimension), item_params_std))
     log_gamma = pyro.sample("log c", dist.Normal(torch.zeros(n_items), item_params_std))
     gamma = sigmoid(log_gamma)
 
@@ -63,7 +64,7 @@ def irt_model(
         alphas = pyro.sample(
             "a",
             dist.Normal(
-                alpha_dist["param"]["mu"] * torch.ones(n_items,3),
+                alpha_dist["param"]["mu"] * torch.ones(n_items, dimension),
                 alpha_dist["param"]["std"],
             ),
         )
@@ -71,7 +72,7 @@ def irt_model(
         alphas = pyro.sample(
             "a",
             dist.LogNormal(
-                alpha_dist["param"]["mu"] * torch.ones(n_items,3),
+                alpha_dist["param"]["mu"] * torch.ones(n_items, dimension),
                 alpha_dist["param"]["std"],
             ),
         )
@@ -79,8 +80,8 @@ def irt_model(
         alphas = pyro.sample(
             "a",
             dist.Beta(
-                alpha_dist["param"]["alpha"] * torch.ones(n_items,3),
-                alpha_dist["param"]["beta"] * torch.ones(n_items,3),
+                alpha_dist["param"]["alpha"] * torch.ones(n_items, dimension),
+                alpha_dist["param"]["beta"] * torch.ones(n_items, dimension),
             ),
         )
     else:
@@ -133,7 +134,7 @@ def irt_model(
     return lik
 
 
-def vi_posterior(obs, alpha_dist, theta_dist):
+def vi_posterior(obs, alpha_dist, theta_dist, dimension):
     '''
     3 parameter IRT guide used for stochastic variational inference in Pyro.
 
@@ -156,8 +157,8 @@ def vi_posterior(obs, alpha_dist, theta_dist):
     pyro.sample(
         "b",
         dist.Normal(
-            pyro.param("b mu", torch.zeros(n_items,3)),
-            torch.exp(pyro.param("b logstd", torch.zeros(n_items,3))),
+            pyro.param("b mu", torch.zeros(n_items, dimension)),
+            torch.exp(pyro.param("b logstd", torch.zeros(n_items, dimension))),
         ),
     )
     pyro.sample(
@@ -172,12 +173,12 @@ def vi_posterior(obs, alpha_dist, theta_dist):
         pyro.sample(
             "a",
             dist.Normal(
-                pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, 3)),
+                pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
                 torch.exp(
                     pyro.param(
                         "a logstd",
                         torch.log(torch.tensor(alpha_dist["param"]["std"]))
-                        * torch.ones(n_items,3),
+                        * torch.ones(n_items, dimension),
                     )
                 ),
             ),
@@ -186,12 +187,12 @@ def vi_posterior(obs, alpha_dist, theta_dist):
         pyro.sample(
             "a",
             dist.LogNormal(
-                pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items,3)),
+                pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
                 torch.exp(
                     pyro.param(
                         "a logstd",
                         torch.log(torch.tensor(alpha_dist["param"]["std"]))
-                        * torch.ones(n_items,3),
+                        * torch.ones(n_items, dimension),
                     )
                 ),
             ),
@@ -201,9 +202,9 @@ def vi_posterior(obs, alpha_dist, theta_dist):
             "a",
             dist.Beta(
                 pyro.param(
-                    "a alpha", alpha_dist["param"]["alpha"] * torch.ones(n_items,3)
+                    "a alpha", alpha_dist["param"]["alpha"] * torch.ones(n_items, dimension)
                 ),
-                pyro.param("a beta", alpha_dist["param"]["beta"] * torch.ones(n_items,3)),
+                pyro.param("a beta", alpha_dist["param"]["beta"] * torch.ones(n_items, dimension)),
             ),
         )
     else:
@@ -254,7 +255,7 @@ def vi_posterior(obs, alpha_dist, theta_dist):
 
 
 def get_model_guide(
-    alpha_dist, theta_dist, alpha_transform, theta_transform, item_param_std
+    alpha_dist, theta_dist, alpha_transform, theta_transform, item_param_std, dimension=1
 ):
     '''
     Method to define 3 parameter IRT model and guide given specifications for item discrimination [alpha]
@@ -286,8 +287,9 @@ def get_model_guide(
         alpha_transform=alpha_transform,
         theta_transform=theta_transform,
         item_params_std=item_param_std,
+        dimension=dimension,
     )
-    guide = lambda obs: vi_posterior(obs, alpha_dist, theta_dist)
+    guide = lambda obs: vi_posterior(obs, alpha_dist, theta_dist, dimension)
 
     return model, guide
 
@@ -473,6 +475,7 @@ def main(args):
         get_transform(args.discr_transform),
         get_transform(args.ability_transform),
         args.item_param_std,
+        args.dimension
     )
 
     _ = train(
@@ -599,6 +602,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr", default=1e-1, help="learning rate", type=float)
     parser.add_argument("--beta1", default=0.9, help="beta 1 for AdamW", type=float)
     parser.add_argument("--beta2", default=0.999, help="beta 2 for AdamW", type=float)
+    parser.add_argument("--dimension", default=3, help="dimension of IRT", type=int)
 
     # Tracking arguments
     parser.add_argument("--verbose", action="store_true", help="boolean for tracking")

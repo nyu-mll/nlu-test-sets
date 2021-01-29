@@ -1,6 +1,6 @@
 import argparse
 import os
-
+import pickle
 import pandas as pd
 import numpy as np
 import torch
@@ -481,7 +481,7 @@ def main(args):
         args.dimension
     )
 
-    _ = train(
+    elbo_train_loss = train(
         model,
         guide,
         combined_responses.to_numpy(),
@@ -501,6 +501,8 @@ def main(args):
 
     pyro.get_param_store().save(os.path.join(exp_path, "params.p"))
     combined_responses.to_pickle(os.path.join(exp_path, "responses.p"))
+    with open(os.path.join(exp_path, "train_elbo_losses.p"), 'wb') as f:
+        pickle.dump(elbo_train_loss, f)
     print(f"Saved parameters and responses for {exp_name} in\n{exp_path}")
 
 

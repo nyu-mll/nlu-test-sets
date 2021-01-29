@@ -29,4 +29,5 @@ venv.bak/
 
 #params
 irt_scripts/plot_stats_pickles/*
-./params*
+#params*
+#params*/*

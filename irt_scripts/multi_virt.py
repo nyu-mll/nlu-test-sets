@@ -119,6 +119,7 @@ def irt_model(
     thetas = theta_transform(thetas)
 
 
+    import pdb; pdb.set_trace()
     lik = pyro.sample(
         "likelihood",
         dist.Bernoulli(
@@ -489,9 +490,9 @@ def main(args):
 
     # Save parameters and sampled responses
     if args.no_subsample:
-        exp_name = f"alpha-{args.discr}-{args.discr_transform}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
+        exp_name = f"alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
     else:
-        exp_name = f"alpha-{args.discr}-{args.discr_transform}_theta-{args.ability}-{args.ability_transform}_sample-{args.sample_size}_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
+        exp_name = f"alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_sample-{args.sample_size}_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
     out_dir = args.out_dir if args.out_dir != "" else os.path.join(".", "output")
     exp_path = os.path.join(out_dir, exp_name)
     os.makedirs(exp_path, exist_ok=True)

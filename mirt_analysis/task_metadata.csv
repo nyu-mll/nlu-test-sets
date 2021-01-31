@@ -1,0 +1,29 @@
+jiant_name,taskname,format,year
+rte,RTE,classification,2005
+snli,SNLI,classification,2015
+mnli,MNLI,classification,2018
+cb,CB,classification,2019
+copa,COPA,MC-sent,2011
+wsc,WSC,MC-sent,2012
+commonsenseqa,CSQA,MC-sent,2019
+mctaco,MC-TACO,MC-sent,2019
+socialiqa,SocialIQA,MC-sent,2019
+wic,WiC,MC-sent,2019
+abductive-nli,AbductiveNLI,MC-sent,2020
+piqa,PiQA,MC-sent,2020
+winogrande,Winogrande,MC-sent,2020
+arc-challenge,ARC-C,MC-par,2018
+arc-easy,ARC-E,MC-par,2018
+arct,ARCT,MC-par,2018
+mcscript,MCScript,MC-par,2018
+boolq,BoolQ,MC-par,2019
+cosmosqa,CosmosQA,MC-par,2019
+hellaswag,HellaSwag,MC-par,2019
+mutual,MuTual,MC-par,2020
+mutual-plus,MuTual+,MC-par,2020
+quail,QuAIL,MC-par,2020
+qamr,QAMR,span selection,2018
+newsqa,NewsQA,span selection,2017
+squad-v2,SQuAD2.0,span selection,2018
+mrqa-nq,MRQA-NQ,span selection,2019
+quoref,Quoref,span selection,2019

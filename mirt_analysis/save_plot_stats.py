@@ -28,10 +28,11 @@ sns.set(style="whitegrid")
 
 import sys
 dim = sys.argv[1]
+base_dir=sys.argv[2]
 file_name=f'alpha-lognormal-identity-dim{dim}_theta-normal-identity_nosubsample_1.00_0.20'
 print(file_name)
-sys.exit(0)
-repo = os.path.dirname(os.path.dirname(os.path.abspath('__file__')))
+repo = base_dir
+print("REPO: ", repo)
 
 def sigmoid(x):
     return 1./(1.+torch.exp(-x))
@@ -260,7 +261,7 @@ data_names, responses, n_items = get_files(
     "csv",
     set(datasets.split(','))
 )
-task_metadata = pd.read_csv('../irt_scripts/task_metadata.csv')
+task_metadata = pd.read_csv(os.path.join(base_dir,'irt_scripts','task_metadata.csv'))
 task_metadata.set_index("jiant_name", inplace=True)
 task_list = [x for x in task_metadata.index if x in data_names]
 

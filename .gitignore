@@ -5,6 +5,7 @@ __pycache__/
 
 # MacOS
 .DS_Store
+.idea/*
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -24,3 +25,9 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+
+#params
+irt_scripts/plot_stats_pickles/*
+params*
+params*/*

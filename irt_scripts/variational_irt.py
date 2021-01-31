@@ -125,7 +125,6 @@ def irt_model(
         ),
         obs=obs,
     )
-
     return lik
 
 

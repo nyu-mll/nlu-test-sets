@@ -4,7 +4,7 @@ BASE_DIR=//Users/claravania/Projects
 SCRIPT_DIR=${BASE_DIR}/nlu-test-sets/irt_scripts
 
 IN_DIR=${BASE_DIR}/nlu-test-sets/data
-OUT_DIR=${BASE_DIR}/nlu-test-sets/params
+OUT_DIR=${BASE_DIR}/nlu-test-sets/params_anli
 SEED=101
 
 # adjust the following parameters according to chosen setup
@@ -15,7 +15,7 @@ ALPH_STDS=('0.30')
 PARAM_STDS=('1.0')
 
 #  list of tasks to analyze
-TASKS="boolq,cb,commonsenseqa,copa,cosmosqa,hellaswag,rte,snli,wic,qamr,arct,mcscript,mctaco,mutual,mutual-plus,quoref,socialiqa,squad-v2,wsc,mnli,mrqa-nq,newsqa,abductive-nli,arc-easy,arc-challenge,piqa,quail,winogrande"
+TASKS="boolq,cb,commonsenseqa,copa,cosmosqa,hellaswag,rte,snli,wic,qamr,arct,mcscript,mctaco,mutual,mutual-plus,quoref,socialiqa,squad-v2,wsc,mnli,mrqa-nq,newsqa,abductive-nli,arc-easy,arc-challenge,piqa,quail,winogrande,adversarial-nli"
 
 # if want to use sampling instead of all examples
 # not used if --no_subsample is specified

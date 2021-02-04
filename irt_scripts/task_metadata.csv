@@ -3,13 +3,14 @@ rte,RTE,classification,2005
 snli,SNLI,classification,2015
 mnli,MNLI,classification,2018
 cb,CB,classification,2019
+adversarial-nli,ANLI,classification,2020
 copa,COPA,MC-sent,2011
 wsc,WSC,MC-sent,2012
 commonsenseqa,CSQA,MC-sent,2019
 mctaco,MC-TACO,MC-sent,2019
 socialiqa,SocialIQA,MC-sent,2019
 wic,WiC,MC-sent,2019
-abductive-nli,AbductiveNLI,MC-sent,2020
+abductive-nli,AbductNLI,MC-sent,2020
 piqa,PiQA,MC-sent,2020
 winogrande,Winogrande,MC-sent,2020
 arc-challenge,ARC-C,MC-par,2018

@@ -29,7 +29,7 @@ sns.set(style="whitegrid")
 import sys
 dim = sys.argv[1]
 base_dir=sys.argv[2]
-file_name=f'alpha-lognormal-identity-dim{dim}_theta-normal-identity_nosubsample_1.00_0.20'
+file_name=f'alpha-lognormal-identity-dim{dim}_theta-normal-identity_nosubsample_1.00_0.15'
 print(file_name)
 repo = base_dir
 print("REPO: ", repo)

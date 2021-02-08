@@ -202,7 +202,7 @@ def vi_posterior(obs, alpha_dist, theta_dist, item_params_std=1.0, dimension=1):
             "a",
             torch.exp(dist.MultivariateNormal(
                 pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
-                torch.exp(
+                covariance_matrix=torch.exp(
                     pyro.param(
                         "a logstd",
                         torch.log(torch.tensor(alpha_dist["param"]["std"]))

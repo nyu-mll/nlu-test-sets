@@ -59,25 +59,30 @@ def irt_model(
     '''
     n_models, n_items = obs.shape[0], obs.shape[1]
 
-    betas = pyro.sample("b", dist.Normal(torch.zeros(n_items, dimension), item_params_std))
+    betas = pyro.sample(
+        "b",
+        dist.MultivariateNormal(
+            torch.zeros(n_items, dimension),
+            covariance_matrix = item_params_std*torch.stack([torch.eye(dimension)]*n_items))
+    )
     log_gamma = pyro.sample("log c", dist.Normal(torch.zeros(n_items), item_params_std))
     gamma = sigmoid(log_gamma)
 
     if alpha_dist["name"] == "normal":
         alphas = pyro.sample(
             "a",
-            dist.Normal(
+            dist.MultivariateNormal(
                 alpha_dist["param"]["mu"] * torch.ones(n_items, dimension),
-                alpha_dist["param"]["std"],
+                covariance_matrix=alpha_dist["param"]["std"] * torch.stack([torch.eye(dimension)]*n_items),
             ),
         )
     elif alpha_dist["name"] == "lognormal":
         alphas = pyro.sample(
             "a",
-            dist.LogNormal(
+            torch.exp(dist.MultivariateNormal(
                 alpha_dist["param"]["mu"] * torch.ones(n_items, dimension),
-                alpha_dist["param"]["std"],
-            ),
+                covariance_matrix=alpha_dist["param"]["std"] * torch.stack([torch.eye(dimension)]*n_items),
+            )),
         )
     elif alpha_dist["name"] == "beta":
         alphas = pyro.sample(
@@ -90,21 +95,21 @@ def irt_model(
     else:
         raise TypeError(f"Alpha distribution {alpha_dist['name']} not supported.")
 
-    if theta_dist["name"] == "normal":
+    if theta_dist["name"] == "normal" or theta_dist["name"] == "lognormal":
         thetas = pyro.sample(
             "theta",
-            dist.Normal(
+            dist.MultivariateNormal(
                 theta_dist["param"]["mu"] * torch.ones(n_models, dimension),
-                theta_dist["param"]["std"],
+                covariance_matrix=theta_dist["param"]["std"] * torch.stack([torch.eye(dimension)]*n_items),
             ),
         )
     elif theta_dist["name"] == "lognormal":
         thetas = pyro.sample(
             "theta",
-            dist.LogNormal(
+            torch.exp(dist.MultivariateNormal(
                 theta_dist["param"]["mu"] * torch.ones(n_models, dimension),
-                theta_dist["param"]["std"],
-            ),
+                covariance_matrix=theta_dist["param"]["std"] * torch.stack([torch.eye(dimension)] * n_items),
+            )),
         )
     elif theta_dist["name"] == "beta":
         thetas = pyro.sample(
@@ -137,7 +142,7 @@ def irt_model(
     return lik
 
 
-def vi_posterior(obs, alpha_dist, theta_dist, dimension):
+def vi_posterior(obs, alpha_dist, theta_dist, item_params_std=1.0, dimension=1):
     '''
     3 parameter IRT guide used for stochastic variational inference in Pyro.
 
@@ -157,11 +162,17 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
     '''
     n_models, n_items = obs.shape[0], obs.shape[1]
 
+    # revisit, current initialization for multivariate covariance matrix has 1 on off diagonals because of torch.exp()
+    # std is now variance values
+
+    # log_cov_template = torch.tensor(np.fill_diagonal(float("-inf")*np.ones((dimension, dimension)), 1))
+    log_cov_template = torch.eye(dimension)
+
     pyro.sample(
         "b",
-        dist.Normal(
+        dist.MultivariateNormal(
             pyro.param("b mu", torch.zeros(n_items, dimension)),
-            torch.exp(pyro.param("b logstd", torch.zeros(n_items, dimension))),
+            covariance_matrix=torch.exp(pyro.param("b logstd", torch.stack([log_cov_template] * n_items))),
         ),
     )
     pyro.sample(
@@ -175,13 +186,13 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
     if alpha_dist["name"] == "normal":
         pyro.sample(
             "a",
-            dist.Normal(
+            dist.MultivariateNormal(
                 pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
-                torch.exp(
+                covariance_matrix=torch.exp(
                     pyro.param(
                         "a logstd",
                         torch.log(torch.tensor(alpha_dist["param"]["std"]))
-                        * torch.ones(n_items, dimension),
+                        * torch.stack([log_cov_template] * n_items),
                     )
                 ),
             ),
@@ -189,16 +200,16 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
     elif alpha_dist["name"] == "lognormal":
         pyro.sample(
             "a",
-            dist.LogNormal(
+            torch.exp(dist.MultivariateNormal(
                 pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
                 torch.exp(
                     pyro.param(
                         "a logstd",
                         torch.log(torch.tensor(alpha_dist["param"]["std"]))
-                        * torch.ones(n_items, dimension),
+                        * torch.stack([log_cov_template] * n_items),
                     )
                 ),
-            ),
+            )),
         )
     elif alpha_dist["name"] == "beta":
         pyro.sample(
@@ -216,13 +227,13 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
     if theta_dist["name"] == "normal":
         pyro.sample(
             "theta",
-            dist.Normal(
+            dist.MultivariateNormal(
                 pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
-                torch.exp(
+                covariance_matrix=torch.exp(
                     pyro.param(
                         "t logstd",
                         torch.log(torch.tensor(theta_dist["param"]["std"]))
-                        * torch.ones(n_models, dimension),
+                        * torch.stack([log_cov_template] * n_items),
                     )
                 ),
             ),
@@ -230,16 +241,16 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
     elif theta_dist["name"] == "lognormal":
         pyro.sample(
             "theta",
-            dist.LogNormal(
+            torch.exp(dist.LogNormal(
                 pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
-                torch.exp(
+                covariance_matrix=torch.exp(
                     pyro.param(
                         "t logstd",
                         torch.log(torch.tensor(theta_dist["param"]["std"]))
-                        * torch.ones(n_models, dimension),
+                        * torch.stack([log_cov_template] * n_items),
                     )
                 ),
-            ),
+            )),
         )
     elif theta_dist["name"] == "beta":
         pyro.sample(

@@ -70,7 +70,7 @@ def irt_model(
     log_gamma = pyro.sample("log c", dist.Normal(torch.zeros(n_items), item_params_std))
     gamma = sigmoid(log_gamma)
 
-    if alpha_dist["name"] == "normal":
+    if alpha_dist["name"] == "normal" or alpha_dist["name"] == "lognormal":
         alphas = pyro.sample(
             "a",
             dist.MultivariateNormal(
@@ -78,14 +78,14 @@ def irt_model(
                 covariance_matrix=alpha_dist["param"]["std"] * torch.stack([torch.eye(dimension)]*n_items),
             ),
         )
-    elif alpha_dist["name"] == "lognormal":
-        alphas = pyro.sample(
-            "a",
-            torch.exp(dist.MultivariateNormal(
-                alpha_dist["param"]["mu"] * torch.ones(n_items, dimension),
-                covariance_matrix=alpha_dist["param"]["std"] * torch.stack([torch.eye(dimension)]*n_items),
-            )),
-        )
+    # elif alpha_dist["name"] == "lognormal":
+    #     alphas = pyro.sample(
+    #         "a",
+    #         torch.exp(dist.MultivariateNormal(
+    #             alpha_dist["param"]["mu"] * torch.ones(n_items, dimension),
+    #             covariance_matrix=alpha_dist["param"]["std"] * torch.stack([torch.eye(dimension)]*n_items),
+    #         )),
+    #     )
     elif alpha_dist["name"] == "beta":
         alphas = pyro.sample(
             "a",
@@ -105,14 +105,14 @@ def irt_model(
                 covariance_matrix=theta_dist["param"]["std"] * torch.stack([torch.eye(dimension)]*n_items),
             ),
         )
-    elif theta_dist["name"] == "lognormal":
-        thetas = pyro.sample(
-            "theta",
-            torch.exp(dist.MultivariateNormal(
-                theta_dist["param"]["mu"] * torch.ones(n_models, dimension),
-                covariance_matrix=theta_dist["param"]["std"] * torch.stack([torch.eye(dimension)] * n_items),
-            )),
-        )
+    # elif theta_dist["name"] == "lognormal":
+    #     thetas = pyro.sample(
+    #         "theta",
+    #         torch.exp(dist.MultivariateNormal(
+    #             theta_dist["param"]["mu"] * torch.ones(n_models, dimension),
+    #             covariance_matrix=theta_dist["param"]["std"] * torch.stack([torch.eye(dimension)] * n_items),
+    #         )),
+    #     )
     elif theta_dist["name"] == "beta":
         thetas = pyro.sample(
             "theta",
@@ -127,6 +127,12 @@ def irt_model(
 
     alphas = alpha_transform(alphas)
     thetas = theta_transform(thetas)
+
+    if alpha_dist["name"] == "lognormal":
+        alphas = torch.exp(alphas)
+
+    if theta_dist["name"] == "lognormal":
+        thetas = torch.exp(thetas)
 
     lik = pyro.sample(
         "likelihood",
@@ -185,7 +191,7 @@ def vi_posterior(obs, alpha_dist, theta_dist, item_params_std=1.0, dimension=1):
         ),
     )
 
-    if alpha_dist["name"] == "normal":
+    if alpha_dist["name"] == "normal" or alpha_dist["name"] == "lognormal":
         pyro.sample(
             "a",
             dist.MultivariateNormal(
@@ -199,20 +205,20 @@ def vi_posterior(obs, alpha_dist, theta_dist, item_params_std=1.0, dimension=1):
                 ),
             ),
         )
-    elif alpha_dist["name"] == "lognormal":
-        pyro.sample(
-            "a",
-            torch.exp(dist.MultivariateNormal(
-                pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
-                covariance_matrix=torch.exp(
-                    pyro.param(
-                        "a logstd",
-                        torch.log(torch.tensor(alpha_dist["param"]["std"]))
-                        * torch.stack([log_cov_template] * n_items),
-                    )
-                ),
-            )),
-        )
+    # elif alpha_dist["name"] == "lognormal":
+    #     pyro.sample(
+    #         "a",
+    #         torch.exp(dist.MultivariateNormal(
+    #             pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
+    #             covariance_matrix=torch.exp(
+    #                 pyro.param(
+    #                     "a logstd",
+    #                     torch.log(torch.tensor(alpha_dist["param"]["std"]))
+    #                     * torch.stack([log_cov_template] * n_items),
+    #                 )
+    #             ),
+    #         )),
+    #     )
     elif alpha_dist["name"] == "beta":
         pyro.sample(
             "a",
@@ -226,7 +232,7 @@ def vi_posterior(obs, alpha_dist, theta_dist, item_params_std=1.0, dimension=1):
     else:
         raise TypeError(f"Alpha distribution {alpha_dist['name']} not supported.")
 
-    if theta_dist["name"] == "normal":
+    if theta_dist["name"] == "normal" or theta_dist["name"] == "lognormal":
         pyro.sample(
             "theta",
             dist.MultivariateNormal(
@@ -240,20 +246,20 @@ def vi_posterior(obs, alpha_dist, theta_dist, item_params_std=1.0, dimension=1):
                 ),
             ),
         )
-    elif theta_dist["name"] == "lognormal":
-        pyro.sample(
-            "theta",
-            torch.exp(dist.LogNormal(
-                pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
-                covariance_matrix=torch.exp(
-                    pyro.param(
-                        "t logstd",
-                        torch.log(torch.tensor(theta_dist["param"]["std"]))
-                        * torch.stack([log_cov_template] * n_items),
-                    )
-                ),
-            )),
-        )
+    # elif theta_dist["name"] == "lognormal":
+    #     pyro.sample(
+    #         "theta",
+    #         torch.exp(dist.LogNormal(
+    #             pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
+    #             covariance_matrix=torch.exp(
+    #                 pyro.param(
+    #                     "t logstd",
+    #                     torch.log(torch.tensor(theta_dist["param"]["std"]))
+    #                     * torch.stack([log_cov_template] * n_items),
+    #                 )
+    #             ),
+    #         )),
+    #     )
     elif theta_dist["name"] == "beta":
         pyro.sample(
             "theta",

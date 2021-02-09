@@ -9,6 +9,8 @@ import pyro
 import pyro.infer
 import pyro.infer.mcmc
 import pyro.distributions as dist
+
+from pyro.infer import SVI, Trace_ELBO
 from tqdm.auto import tqdm
 from weighted_ELBO import Weighted_Trace_ELBO, WeightedSVI
 
@@ -308,7 +310,7 @@ def get_model_guide(
     return model, guide
 
 
-def train(model, guide, data, optimizer, n_steps=500, weights=1):
+def train(model, guide, data, optimizer, n_steps=500, weights=1, loss_type='weighted_elbo'):
     '''
     Method to fit 3 parameter IRT model parameters using stochastic variational inference.
 
@@ -328,14 +330,24 @@ def train(model, guide, data, optimizer, n_steps=500, weights=1):
     '''
     pyro.clear_param_store()
 
-    svi_kernel = WeightedSVI(model, guide, optimizer, loss=Weighted_Trace_ELBO())
+    if loss_type == 'weighted_elbo':
+        svi_kernel = WeightedSVI(model, guide, optimizer, loss=Weighted_Trace_ELBO())
+    elif loss_type == 'trace_elbo':
+        svi_kernel = SVI(model, guide, optimizer, loss=Trace_ELBO())
+    else:
+        raise TypeError(f"{loss_type} not supported.")
+
     loss_track = []
 
     # do gradient steps
     data_ = torch.from_numpy(data.astype("float32"))
     t = tqdm(range(n_steps), desc="elbo loss", miniters=1, disable=False)
     for step in t:
-        elbo_loss = svi_kernel.step(weights, data_)
+        if loss_type == 'weighted_elbo':
+            elbo_loss = svi_kernel.step(weights, data_)
+        else:
+            elbo_loss = svi_kernel.step(data_)
+
         t.set_description(f"elbo loss = {elbo_loss:.2f}")
         loss_track.append(elbo_loss)
 
@@ -620,6 +632,8 @@ if __name__ == "__main__":
     parser.add_argument("--beta1", default=0.9, help="beta 1 for AdamW", type=float)
     parser.add_argument("--beta2", default=0.999, help="beta 2 for AdamW", type=float)
     parser.add_argument("--dimension", default=3, help="dimension of IRT", type=int)
+
+    parser.add_argument("--loss_type", default="weighted_elbo", help="which loss to optimize to", type=str)
 
     # Tracking arguments
     parser.add_argument("--verbose", action="store_true", help="boolean for tracking")

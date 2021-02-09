@@ -1,12 +1,14 @@
 #BASE_DIR=/Users/phumon/Documents/Research/
 # BASE_DIR=//Users/claravania/Projects
 # BASE_DIR=/scratch/wh629/research/irt/irt_script
+loss_type=$1
+
 BASE_DIR=$(pwd)
 echo "Base dir: $BASE_DIR"
 SCRIPT_DIR=${BASE_DIR}/irt_scripts
 
 IN_DIR=${BASE_DIR}/data
-OUT_DIR=${BASE_DIR}/params_mvirt
+OUT_DIR=${BASE_DIR}/params_mvirt-${loss_type}
 SEED=101
 
 # adjust the following parameters according to chosen setup
@@ -31,7 +33,7 @@ do
             echo Alpha Std $alpha_std, Diff Guess Std $item_std
 	    ALPHA_TRANS=identity
 	    THETA_TRANS=identity
-            sbatch $BASE_DIR/sb_test_wh.sbatch $IN_DIR $OUT_DIR $alpha_std $item_std $dim 
+            sbatch $BASE_DIR/sb_test_wh.sbatch $IN_DIR $OUT_DIR $alpha_std $item_std $dim $loss_type
             #sbatch $BASE_DIR/sb_test_wh.sbatch 
             #python \
 	    #	$SCRIPT_DIR/variational_irt.py \

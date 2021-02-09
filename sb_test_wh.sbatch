@@ -25,6 +25,7 @@ sample_size=1500
 alpha_std=$3
 item_std=$4
 dim=$5
+loss_type=$6
 
 logging_dir="alpha-${alpha_std}-${ALPHA_TRANS}-dim${dim}_theta-${normal}-${THETA_TRANS}_nosubsample_${item_std}_${alpha_std}"
 
@@ -33,7 +34,7 @@ echo "starting" >> $OUT_DIR/$logging_dir/log.log 2>&1
 
 echo "$IN_DIR outdir: $OUT_DIR $alpha_std $item_std $dim"
 /scratch/wh629/research/irt/nlu-test-sets/env/bin/python \
-    $(pwd)/irt_scripts/multi_virt_v2.py \
+    $(pwd)/mirt_analysis/multi_virt_v2.py \
     --response_dir $IN_DIR \
     --out_dir $OUT_DIR \
     --seed $SEED \
@@ -46,4 +47,5 @@ echo "$IN_DIR outdir: $OUT_DIR $alpha_std $item_std $dim"
    --no_subsample \
    --alpha_std $alpha_std \
    --item_param_std $item_std \
+   --loss_type $loss_type \
    --dimension $dim --verbose   >> $OUT_DIR/$logging_dir/log.log 2>&1

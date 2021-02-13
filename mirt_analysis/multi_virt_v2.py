@@ -65,7 +65,7 @@ def irt_model(
         "b",
         dist.MultivariateNormal(
             torch.zeros(n_items, dimension),
-            covariance_matrix = item_params_std*torch.stack([torch.eye(dimension)]*n_items))
+            scale_tril=item_params_std*torch.stack([torch.eye(dimension)]*n_items))
     )
     log_gamma = pyro.sample("log c", dist.Normal(torch.zeros(n_items), item_params_std))
     gamma = sigmoid(log_gamma)
@@ -75,7 +75,7 @@ def irt_model(
             "a",
             dist.MultivariateNormal(
                 alpha_dist["param"]["mu"] * torch.ones(n_items, dimension),
-                covariance_matrix=alpha_dist["param"]["std"] * torch.stack([torch.eye(dimension)]*n_items),
+                scale_tril=alpha_dist["param"]["std"] * torch.stack([torch.eye(dimension)]*n_items),
             ),
         )
     # elif alpha_dist["name"] == "lognormal":
@@ -83,7 +83,7 @@ def irt_model(
     #         "a",
     #         torch.exp(dist.MultivariateNormal(
     #             alpha_dist["param"]["mu"] * torch.ones(n_items, dimension),
-    #             covariance_matrix=alpha_dist["param"]["std"] * torch.stack([torch.eye(dimension)]*n_items),
+    #             scale_tril=alpha_dist["param"]["std"] * torch.stack([torch.eye(dimension)]*n_items),
     #         )),
     #     )
     elif alpha_dist["name"] == "beta":
@@ -102,7 +102,7 @@ def irt_model(
             "theta",
             dist.MultivariateNormal(
                 theta_dist["param"]["mu"] * torch.ones(n_models, dimension),
-                covariance_matrix=theta_dist["param"]["std"] * torch.stack([torch.eye(dimension)]*n_items),
+                scale_tril=theta_dist["param"]["std"] * torch.stack([torch.eye(dimension)]*n_models),
             ),
         )
     # elif theta_dist["name"] == "lognormal":
@@ -110,7 +110,7 @@ def irt_model(
     #         "theta",
     #         torch.exp(dist.MultivariateNormal(
     #             theta_dist["param"]["mu"] * torch.ones(n_models, dimension),
-    #             covariance_matrix=theta_dist["param"]["std"] * torch.stack([torch.eye(dimension)] * n_items),
+    #             scale_tril=theta_dist["param"]["std"] * torch.stack([torch.eye(dimension)] * n_models),
     #         )),
     #     )
     elif theta_dist["name"] == "beta":
@@ -134,13 +134,16 @@ def irt_model(
     if theta_dist["name"] == "lognormal":
         thetas = torch.exp(thetas)
 
+    ################################ DEBUG ################################################
+    # assert False, f"debug {(thetas[:, None, :] - betas[None, :, :]).shape} | {alphas[None, :, :].shape}"
+
     lik = pyro.sample(
         "likelihood",
         dist.Bernoulli(
             gamma[None, :]
             + (1.0 - gamma[None, :])
             * sigmoid(
-                torch.sum(alphas[None, :, :] * (thetas[:, None] - betas[None, :]).squeeze(), dim=-1)
+                torch.sum(alphas[None, :, :] * (thetas[:, None, :] - betas[None, :, :]).squeeze(), dim=-1)
                 #alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
             )
         ),
@@ -150,7 +153,7 @@ def irt_model(
     return lik
 
 
-def vi_posterior(obs, alpha_dist, theta_dist, item_params_std=1.0, dimension=1):
+def vi_posterior(obs, alpha_dist, theta_dist, dimension=1):
     '''
     3 parameter IRT guide used for stochastic variational inference in Pyro.
 
@@ -180,7 +183,7 @@ def vi_posterior(obs, alpha_dist, theta_dist, item_params_std=1.0, dimension=1):
         "b",
         dist.MultivariateNormal(
             pyro.param("b mu", torch.zeros(n_items, dimension)),
-            covariance_matrix=torch.exp(pyro.param("b logstd", torch.stack([log_cov_template] * n_items))),
+            scale_tril=torch.exp(pyro.param("b logstd", torch.stack([log_cov_template] * n_items))),
         ),
     )
     pyro.sample(
@@ -196,7 +199,7 @@ def vi_posterior(obs, alpha_dist, theta_dist, item_params_std=1.0, dimension=1):
             "a",
             dist.MultivariateNormal(
                 pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
-                covariance_matrix=torch.exp(
+                scale_tril=torch.exp(
                     pyro.param(
                         "a logstd",
                         torch.log(torch.tensor(alpha_dist["param"]["std"]))
@@ -210,7 +213,7 @@ def vi_posterior(obs, alpha_dist, theta_dist, item_params_std=1.0, dimension=1):
     #         "a",
     #         torch.exp(dist.MultivariateNormal(
     #             pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
-    #             covariance_matrix=torch.exp(
+    #             scale_tril=torch.exp(
     #                 pyro.param(
     #                     "a logstd",
     #                     torch.log(torch.tensor(alpha_dist["param"]["std"]))
@@ -237,11 +240,11 @@ def vi_posterior(obs, alpha_dist, theta_dist, item_params_std=1.0, dimension=1):
             "theta",
             dist.MultivariateNormal(
                 pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
-                covariance_matrix=torch.exp(
+                scale_tril=torch.exp(
                     pyro.param(
                         "t logstd",
                         torch.log(torch.tensor(theta_dist["param"]["std"]))
-                        * torch.stack([log_cov_template] * n_items),
+                        * torch.stack([log_cov_template] * n_models),
                     )
                 ),
             ),
@@ -251,11 +254,11 @@ def vi_posterior(obs, alpha_dist, theta_dist, item_params_std=1.0, dimension=1):
     #         "theta",
     #         torch.exp(dist.LogNormal(
     #             pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
-    #             covariance_matrix=torch.exp(
+    #             scale_tril=torch.exp(
     #                 pyro.param(
     #                     "t logstd",
     #                     torch.log(torch.tensor(theta_dist["param"]["std"]))
-    #                     * torch.stack([log_cov_template] * n_items),
+    #                     * torch.stack([log_cov_template] * n_models),
     #                 )
     #             ),
     #         )),
@@ -311,7 +314,7 @@ def get_model_guide(
         item_params_std=item_param_std,
         dimension=dimension,
     )
-    guide = lambda obs: vi_posterior(obs, alpha_dist, theta_dist, dimension)
+    guide = lambda obs: vi_posterior(obs, alpha_dist, theta_dist, dimension=dimension)
 
     return model, guide
 

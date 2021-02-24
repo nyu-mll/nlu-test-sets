@@ -143,7 +143,7 @@ def irt_model(
             gamma[None, :]
             + (1.0 - gamma[None, :])
             * sigmoid(
-                torch.sum(alphas[None, :, :] * (thetas[:, None, :] - betas[None, :, :]).squeeze(), dim=-1)
+                torch.sum(alphas[None, :, :] * (thetas[:, None, :] - betas[None, :, :]).squeeze(dim = -1), dim=-1)
                 #alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
             )
         ),
@@ -173,8 +173,7 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension=1):
     '''
     n_models, n_items = obs.shape[0], obs.shape[1]
 
-    # revisit, current initialization for multivariate covariance matrix has 1 on off diagonals because of torch.exp()
-    # std is now variance values
+    # logstd is now lower_triangular matrix of cholesky decomposition
 
     # log_cov_template = torch.tensor(np.fill_diagonal(float("-inf")*np.ones((dimension, dimension)), 1))
     log_cov_template = torch.eye(dimension)

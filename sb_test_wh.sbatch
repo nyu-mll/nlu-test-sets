@@ -3,7 +3,7 @@
 #SBATCH --job-name=mvirt
 #SBATCH --output=sl_vi_en_1011.out
 #SBATCH --error=sl_zh_en_1011.err
-#SBATCH --time=2:00:00
+#SBATCH --time=24:00:00
 #SBATCH --nodes=1
 #SBATCH --mem=10GB
 #SBATCH --mail-user=wh629@nyu.edu
@@ -26,8 +26,9 @@ alpha_std=$3
 item_std=$4
 dim=$5
 loss_type=$6
+lr=$7
 
-logging_dir="alpha-${alpha_std}-${ALPHA_TRANS}-dim${dim}_theta-${normal}-${THETA_TRANS}_nosubsample_${item_std}_${alpha_std}"
+logging_dir="${lr}-alpha-${alpha_std}-${ALPHA_TRANS}-dim${dim}_theta-${normal}-${THETA_TRANS}_nosubsample_${item_std}_${alpha_std}"
 
 mkdir -p $OUT_DIR/$logging_dir
 echo "starting" >> $OUT_DIR/$logging_dir/log.log 2>&1
@@ -48,4 +49,5 @@ echo "$IN_DIR outdir: $OUT_DIR $alpha_std $item_std $dim"
    --alpha_std $alpha_std \
    --item_param_std $item_std \
    --loss_type $loss_type \
+   --lr $lr \
    --dimension $dim --verbose   >> $OUT_DIR/$logging_dir/log.log 2>&1

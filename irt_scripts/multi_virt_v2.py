@@ -121,18 +121,31 @@ def irt_model(
     alphas = alpha_transform(alphas)
     thetas = theta_transform(thetas)
 
-    lik = pyro.sample(
-        "likelihood",
-        dist.Bernoulli(
-            gamma[None, :]
-            + (1.0 - gamma[None, :])
-            * sigmoid(
-                torch.sum(alphas[None, :, :] * (thetas[:, None] - betas[None, :]).squeeze(), dim=-1)
-                #alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
-            )
-        ),
-        obs=obs,
-    )
+    if dimension > 1:
+        lik = pyro.sample(
+            "likelihood",
+            dist.Bernoulli(
+                gamma[None, :]
+                + (1.0 - gamma[None, :])
+                * sigmoid(
+                    torch.sum(alphas[None, :, :] * (thetas[:, None] - betas[None, :]).squeeze(), dim=-1)
+                    #alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
+                )
+            ),
+            obs=obs,
+        )
+    else:
+        lik = pyro.sample(
+            "likelihood",
+            dist.Bernoulli(
+                gamma[None, :]
+                + (1.0 - gamma[None, :])
+                * sigmoid(
+                    alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
+                )
+            ),
+            obs=obs,
+        )
 
     return lik
 
@@ -490,6 +503,20 @@ def main(args):
         weights=weights,
     )
 
+    import pdb; pdb.set_trace()
+    observed_data=torch.tensor(combined_responses.to_numpy()).float()
+    from pyro.infer import EmpiricalMarginal, Importance, Predictive
+
+    predictive = Predictive(model, guide=guide, num_samples=800,
+                        return_sites=("a", "b", "theta", "obs", "_RETURN"))
+    samples = predictive(observed_data)
+
+    importance = Importance(model, guide, num_samples=5000)
+    print("doing importance sampling...")
+    emp_marginal = EmpiricalMarginal(importance.run(observed_data))
+    marginal_samples = torch.stack([emp_marginal() for _ in range(10)])
+    
+
     # Save parameters and sampled responses
     if args.no_subsample:
         exp_name = f"alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
@@ -603,7 +630,7 @@ if __name__ == "__main__":
         type=str,
     )
     parser.add_argument(
-        "--steps", default=500, help="number of training steps", type=int
+        "--steps", default=1500, help="number of training steps", type=int
     )
     parser.add_argument("--lr", default=1e-1, help="learning rate", type=float)
     parser.add_argument("--beta1", default=0.9, help="beta 1 for AdamW", type=float)

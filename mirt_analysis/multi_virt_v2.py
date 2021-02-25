@@ -637,7 +637,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--steps", default=500, help="number of training steps", type=int
     )
-    parser.add_argument("--lr", default=1e-1, help="learning rate", type=float)
+    parser.add_argument("--lr", default=1e-3, help="learning rate", type=float)
     parser.add_argument("--beta1", default=0.9, help="beta 1 for AdamW", type=float)
     parser.add_argument("--beta2", default=0.999, help="beta 2 for AdamW", type=float)
     parser.add_argument("--dimension", default=3, help="dimension of IRT", type=int)

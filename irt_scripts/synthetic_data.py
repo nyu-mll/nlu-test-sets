@@ -1,6 +1,6 @@
 import argparse
 import os
-
+import pickle
 import pandas as pd
 import numpy as np
 import torch
@@ -12,6 +12,9 @@ import pyro.distributions as dist
 from tqdm.auto import tqdm
 from weighted_ELBO import Weighted_Trace_ELBO, WeightedSVI
 
+import os
+
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 def sigmoid(x):
     return 1.0 / (1.0 + torch.exp(-x))
@@ -24,6 +27,7 @@ def irt_model(
     alpha_transform=lambda x: x,
     theta_transform=lambda x: x,
     item_params_std=1.0,
+    dimension = 1
 ):
     '''
     3 parameter IRT model used for stochastic variational inference. The model is defined by the
@@ -55,7 +59,7 @@ def irt_model(
     '''
     n_models, n_items = obs.shape[0], obs.shape[1]
 
-    betas = pyro.sample("b", dist.Normal(torch.zeros(n_items), item_params_std))
+    betas = pyro.sample("b", dist.Normal(torch.zeros(n_items, dimension), item_params_std))
     log_gamma = pyro.sample("log c", dist.Normal(torch.zeros(n_items), item_params_std))
     gamma = sigmoid(log_gamma)
 
@@ -63,7 +67,7 @@ def irt_model(
         alphas = pyro.sample(
             "a",
             dist.Normal(
-                alpha_dist["param"]["mu"] * torch.ones(n_items),
+                alpha_dist["param"]["mu"] * torch.ones(n_items, dimension),
                 alpha_dist["param"]["std"],
             ),
         )
@@ -71,7 +75,7 @@ def irt_model(
         alphas = pyro.sample(
             "a",
             dist.LogNormal(
-                alpha_dist["param"]["mu"] * torch.ones(n_items),
+                alpha_dist["param"]["mu"] * torch.ones(n_items, dimension),
                 alpha_dist["param"]["std"],
             ),
         )
@@ -79,8 +83,8 @@ def irt_model(
         alphas = pyro.sample(
             "a",
             dist.Beta(
-                alpha_dist["param"]["alpha"] * torch.ones(n_items),
-                alpha_dist["param"]["beta"] * torch.ones(n_items),
+                alpha_dist["param"]["alpha"] * torch.ones(n_items, dimension),
+                alpha_dist["param"]["beta"] * torch.ones(n_items, dimension),
             ),
         )
     else:
@@ -90,7 +94,7 @@ def irt_model(
         thetas = pyro.sample(
             "theta",
             dist.Normal(
-                theta_dist["param"]["mu"] * torch.ones(n_models),
+                theta_dist["param"]["mu"] * torch.ones(n_models, dimension),
                 theta_dist["param"]["std"],
             ),
         )
@@ -98,7 +102,7 @@ def irt_model(
         thetas = pyro.sample(
             "theta",
             dist.LogNormal(
-                theta_dist["param"]["mu"] * torch.ones(n_models),
+                theta_dist["param"]["mu"] * torch.ones(n_models, dimension),
                 theta_dist["param"]["std"],
             ),
         )
@@ -106,29 +110,46 @@ def irt_model(
         thetas = pyro.sample(
             "theta",
             dist.Beta(
-                theta_dist["param"]["alpha"] * torch.ones(n_models),
-                theta_dist["param"]["beta"] * torch.ones(n_models),
+                theta_dist["param"]["alpha"] * torch.ones(n_models, dimension),
+                theta_dist["param"]["beta"] * torch.ones(n_models, dimension),
             ),
         )
     else:
         raise TypeError(f"theta distribution {theta_dist['name']} not supported.")
 
+
     alphas = alpha_transform(alphas)
     thetas = theta_transform(thetas)
 
-    lik = pyro.sample(
-        "likelihood",
-        dist.Bernoulli(
-            gamma[None, :]
-            + (1.0 - gamma[None, :])
-            * sigmoid(alphas[None, :] * (thetas[:, None] - betas[None, :]))
-        ),
-        obs=obs,
-    )
+    if dimension > 1:
+        lik = pyro.sample(
+            "likelihood",
+            dist.Bernoulli(
+                gamma[None, :]
+                + (1.0 - gamma[None, :])
+                * sigmoid(
+                    torch.sum(alphas[None, :, :] * (thetas[:, None] - betas[None, :]).squeeze(), dim=-1)
+                    #alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
+                )
+            ),
+            obs=obs,
+        )
+    else:
+        lik = pyro.sample(
+            "likelihood",
+            dist.Bernoulli(
+                gamma[None, :]
+                + (1.0 - gamma[None, :])
+                * sigmoid(
+                    alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
+                )
+            ),
+            obs=obs,
+        )
     return lik
 
 
-def vi_posterior(obs, alpha_dist, theta_dist):
+def vi_posterior(obs, alpha_dist, theta_dist, dimension):
     '''
     3 parameter IRT guide used for stochastic variational inference in Pyro.
 
@@ -151,8 +172,8 @@ def vi_posterior(obs, alpha_dist, theta_dist):
     pyro.sample(
         "b",
         dist.Normal(
-            pyro.param("b mu", torch.zeros(n_items)),
-            torch.exp(pyro.param("b logstd", torch.zeros(n_items))),
+            pyro.param("b mu", torch.zeros(n_items, dimension)),
+            torch.exp(pyro.param("b logstd", torch.zeros(n_items, dimension))),
         ),
     )
     pyro.sample(
@@ -167,12 +188,12 @@ def vi_posterior(obs, alpha_dist, theta_dist):
         pyro.sample(
             "a",
             dist.Normal(
-                pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items)),
+                pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
                 torch.exp(
                     pyro.param(
                         "a logstd",
                         torch.log(torch.tensor(alpha_dist["param"]["std"]))
-                        * torch.ones(n_items),
+                        * torch.ones(n_items, dimension),
                     )
                 ),
             ),
@@ -181,12 +202,12 @@ def vi_posterior(obs, alpha_dist, theta_dist):
         pyro.sample(
             "a",
             dist.LogNormal(
-                pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items)),
+                pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
                 torch.exp(
                     pyro.param(
                         "a logstd",
                         torch.log(torch.tensor(alpha_dist["param"]["std"]))
-                        * torch.ones(n_items),
+                        * torch.ones(n_items, dimension),
                     )
                 ),
             ),
@@ -196,9 +217,9 @@ def vi_posterior(obs, alpha_dist, theta_dist):
             "a",
             dist.Beta(
                 pyro.param(
-                    "a alpha", alpha_dist["param"]["alpha"] * torch.ones(n_items)
+                    "a alpha", alpha_dist["param"]["alpha"] * torch.ones(n_items, dimension)
                 ),
-                pyro.param("a beta", alpha_dist["param"]["beta"] * torch.ones(n_items)),
+                pyro.param("a beta", alpha_dist["param"]["beta"] * torch.ones(n_items, dimension)),
             ),
         )
     else:
@@ -208,12 +229,12 @@ def vi_posterior(obs, alpha_dist, theta_dist):
         pyro.sample(
             "theta",
             dist.Normal(
-                pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models)),
+                pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
                 torch.exp(
                     pyro.param(
                         "t logstd",
                         torch.log(torch.tensor(theta_dist["param"]["std"]))
-                        * torch.ones(n_models),
+                        * torch.ones(n_models, dimension),
                     )
                 ),
             ),
@@ -222,12 +243,12 @@ def vi_posterior(obs, alpha_dist, theta_dist):
         pyro.sample(
             "theta",
             dist.LogNormal(
-                pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models)),
+                pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
                 torch.exp(
                     pyro.param(
                         "t logstd",
                         torch.log(torch.tensor(theta_dist["param"]["std"]))
-                        * torch.ones(n_models),
+                        * torch.ones(n_models, dimension),
                     )
                 ),
             ),
@@ -237,10 +258,10 @@ def vi_posterior(obs, alpha_dist, theta_dist):
             "theta",
             dist.Beta(
                 pyro.param(
-                    "t alpha", theta_dist["param"]["alpha"] * torch.ones(n_models)
+                    "t alpha", theta_dist["param"]["alpha"] * torch.ones(n_models, dimension)
                 ),
                 pyro.param(
-                    "t beta", theta_dist["param"]["beta"] * torch.ones(n_models)
+                    "t beta", theta_dist["param"]["beta"] * torch.ones(n_models, dimension)
                 ),
             ),
         )
@@ -249,7 +270,7 @@ def vi_posterior(obs, alpha_dist, theta_dist):
 
 
 def get_model_guide(
-    alpha_dist, theta_dist, alpha_transform, theta_transform, item_param_std
+    alpha_dist, theta_dist, alpha_transform, theta_transform, item_param_std, dimension=1
 ):
     '''
     Method to define 3 parameter IRT model and guide given specifications for item discrimination [alpha]
@@ -281,8 +302,9 @@ def get_model_guide(
         alpha_transform=alpha_transform,
         theta_transform=theta_transform,
         item_params_std=item_param_std,
+        dimension=dimension,
     )
-    guide = lambda obs: vi_posterior(obs, alpha_dist, theta_dist)
+    guide = lambda obs: vi_posterior(obs, alpha_dist, theta_dist, dimension)
 
     return model, guide
 
@@ -328,64 +350,6 @@ def get_response(file, ftype):
         raise KeyError(f"{ftype} reading not supported.")
 
 
-def get_file_names(files_dir, ftype):
-    file_list = []
-    for root, dir, files in os.walk(files_dir):
-        for file in files:
-            if file.endswith(ftype):
-                file_list.append(file)
-        break
-    return sorted(file_list)
-
-
-def get_files(files_dir, ftype, taskset, verbose=False):
-    responses = {}
-    n_items = []
-    data_names = []
-
-    file_list = get_file_names(files_dir, ftype)
-    for file in file_list:
-        data_name = file[: -len("_irt_all_coded.csv")]
-
-        if data_name in taskset:
-            responses[data_name] = get_response(os.path.join(files_dir, file), ftype)
-            n_items.append(responses[data_name].shape[1])
-            data_names.append(data_name)
-
-    if verbose:
-        print(f"Missing:\n {set(taskset) - set(data_names)}")
-    return data_names, responses, n_items
-
-
-def subsample_responses(responses, sample_size, no_subsample, n_items, datasets):
-    combined_responses = None
-
-    if no_subsample:
-        print("Use all examples:")
-    else:
-        print("Use sampling with sample size", sample_size)
-
-    for idx, response in enumerate(responses.values()):
-        min_items = n_items[idx] if sample_size > n_items[idx] else sample_size
-
-        if no_subsample:
-            sampled = response
-            print(datasets[idx], "num test items: ", n_items[idx])
-        else:
-            sampled = response.sample(n=min_items, replace=False, axis=1)
-            print(datasets[idx], "num test items: ", min_items)
-
-        if combined_responses is None:
-            combined_responses = sampled
-            continue
-
-        combined_responses = pd.merge(
-            combined_responses, sampled, left_index=True, right_index=True,
-        )
-
-    return combined_responses
-
-
 def get_distribution_params(distribution, verbose=False, std_overwrite=1.0):
     if verbose:
         print(f"Std Overwrite {std_overwrite:.2f}")
@@ -410,45 +374,75 @@ def get_transform(transform):
 
 
 def set_seeds(seed):
+    pyro.clear_param_store()
     np.random.seed(seed)
     pyro.set_rng_seed(seed)
     torch.manual_seed(seed)
 
 
+def generate_responses(dimension):
+    n_models, n_items = 18, 1000
+    item_params_std = 1
+
+    alpha_dist = {"mu": 0.0, "std": 0.5}
+    theta_dist = {"mu": 0.0, "std": 1}
+
+    positive_transform = lambda x: torch.log(1 + torch.exp(x))
+
+    # Generate betas
+    betas = dist.Normal(torch.zeros(n_items, dimension), item_params_std).sample()
+
+    # Generate gamma
+    log_gamma = dist.Normal(torch.zeros(n_items), item_params_std).sample()
+    gamma = sigmoid(log_gamma)
+
+    # Generate alphas
+    alphas = dist.Normal(
+                    alpha_dist["mu"] * torch.ones(n_items, dimension),
+                    alpha_dist["std"],
+                ).sample()
+
+    # Generate thetas
+    thetas = dist.Normal(
+                    theta_dist["mu"] * torch.ones(n_models, dimension),
+                    theta_dist["std"],
+                ).sample()
+
+    #alphas = positive_transform(alphas)
+    #thetas = positive_transform(thetas)
+
+    if dimension > 1:
+        lik = dist.Bernoulli(
+                    gamma[None, :]
+                    + (1.0 - gamma[None, :])
+                    * sigmoid(
+                        torch.sum(alphas[None, :, :] * (thetas[:, None] - betas[None, :]).squeeze(), dim=-1)
+                        #alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
+                    )
+                ).sample()
+    else:
+        lik = dist.Bernoulli(
+                    gamma[None, :]
+                    + (1.0 - gamma[None, :])
+                    * sigmoid(
+                        alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
+                    )
+                ).sample()
+
+    responses=lik
+
+    return responses, n_items
+
+
 def main(args):
     # Set seed
+
     set_seeds(args.seed)
 
-    # Import response patterns
-    data_names, responses, n_items = get_files(
-        args.response_dir,
-        args.response_type,
-        args.datasets.split(","),
-        verbose=args.verbose,
-    )
+    responses, n_items = generate_responses(args.dimension)
+    weights = 1
 
-    # Set weights for weighted ELBO
-    if args.no_subsample:
-        weights = sum([[1 / n] * n for n in n_items], [])
-    else:
-        weights = 1
-
-    # Sample items
-    min_items = min(n_items) if args.sample_size == -1 else args.sample_size
-    combined_responses = subsample_responses(
-        responses, min_items, args.no_subsample, n_items, data_names
-    )
-
-    if args.verbose:
-        nl = "\n"
-        tab = "\t"
-        print(f"Extracted from {len(list(responses.keys()))} files")
-        print(
-            f"Collected response patterns for{nl+tab}{(nl+tab).join(list(responses.keys()))}"
-        )
-        print(f"Total number of items is {sum(n_items)}")
-        print(f"Total combined items is {combined_responses.shape[1]}")
-        print(f"Item Param Std is {args.item_param_std:.2f}")
+    set_seeds(args.seed)
 
     # Train model
     adam_params = {"lr": args.lr, "betas": (args.beta1, args.beta2)}
@@ -468,12 +462,13 @@ def main(args):
         get_transform(args.discr_transform),
         get_transform(args.ability_transform),
         args.item_param_std,
+        args.dimension
     )
 
-    _ = train(
+    elbo_train_loss = train(
         model,
         guide,
-        combined_responses.to_numpy(),
+        responses.numpy(),
         optimizer,
         n_steps=args.steps,
         weights=weights,
@@ -481,15 +476,18 @@ def main(args):
 
     # Save parameters and sampled responses
     if args.no_subsample:
-        exp_name = f"alpha-{args.discr}-{args.discr_transform}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
+        exp_name = f"sync-alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
     else:
-        exp_name = f"alpha-{args.discr}-{args.discr_transform}_theta-{args.ability}-{args.ability_transform}_sample-{args.sample_size}_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
+        exp_name = f"sync-alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_sample-{args.sample_size}_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
     out_dir = args.out_dir if args.out_dir != "" else os.path.join(".", "output")
     exp_path = os.path.join(out_dir, exp_name)
     os.makedirs(exp_path, exist_ok=True)
-    import pdb; pdb.set_trace()
+    print("last elbo: ", elbo_train_loss[-1])
+    print("elbo losses: ", elbo_train_loss)
     pyro.get_param_store().save(os.path.join(exp_path, "params.p"))
-    combined_responses.to_pickle(os.path.join(exp_path, "responses.p"))
+    #responses.to_pickle(os.path.join(exp_path, "responses.p"))
+    with open(os.path.join(exp_path, "train_elbo_losses.p"), 'wb') as f:
+        pickle.dump(elbo_train_loss, f)
     print(f"Saved parameters and responses for {exp_name} in\n{exp_path}")
 
 
@@ -591,9 +589,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--steps", default=500, help="number of training steps", type=int
     )
-    parser.add_argument("--lr", default=1e-1, help="learning rate", type=float)
+    parser.add_argument("--lr", default=1e-3, help="learning rate", type=float)
     parser.add_argument("--beta1", default=0.9, help="beta 1 for AdamW", type=float)
     parser.add_argument("--beta2", default=0.999, help="beta 2 for AdamW", type=float)
+    parser.add_argument("--dimension", default=3, help="dimension of IRT", type=int)
+
+    parser.add_argument("--loss_type", default="weighted_elbo", help="which loss to optimize to", type=str)
 
     # Tracking arguments
     parser.add_argument("--verbose", action="store_true", help="boolean for tracking")

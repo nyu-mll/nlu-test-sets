@@ -1,6 +1,6 @@
 import argparse
 import os
-
+import pickle
 import pandas as pd
 import numpy as np
 import torch
@@ -12,6 +12,9 @@ import pyro.distributions as dist
 from tqdm.auto import tqdm
 from weighted_ELBO import Weighted_Trace_ELBO, WeightedSVI
 
+import os
+
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 def sigmoid(x):
     return 1.0 / (1.0 + torch.exp(-x))
@@ -91,7 +94,7 @@ def irt_model(
         thetas = pyro.sample(
             "theta",
             dist.Normal(
-                theta_dist["param"]["mu"] * torch.ones(n_models),
+                theta_dist["param"]["mu"] * torch.ones(n_models, dimension),
                 theta_dist["param"]["std"],
             ),
         )
@@ -99,7 +102,7 @@ def irt_model(
         thetas = pyro.sample(
             "theta",
             dist.LogNormal(
-                theta_dist["param"]["mu"] * torch.ones(n_models),
+                theta_dist["param"]["mu"] * torch.ones(n_models, dimension),
                 theta_dist["param"]["std"],
             ),
         )
@@ -107,8 +110,8 @@ def irt_model(
         thetas = pyro.sample(
             "theta",
             dist.Beta(
-                theta_dist["param"]["alpha"] * torch.ones(n_models),
-                theta_dist["param"]["beta"] * torch.ones(n_models),
+                theta_dist["param"]["alpha"] * torch.ones(n_models, dimension),
+                theta_dist["param"]["beta"] * torch.ones(n_models, dimension),
             ),
         )
     else:
@@ -118,19 +121,31 @@ def irt_model(
     alphas = alpha_transform(alphas)
     thetas = theta_transform(thetas)
 
-
-    import pdb; pdb.set_trace()
-    lik = pyro.sample(
-        "likelihood",
-        dist.Bernoulli(
-            gamma[None, :]
-            + (1.0 - gamma[None, :])
-            * sigmoid(
-                torch.bmm((thetas[:,None,None] - betas[None,:,:]).transpose(0, 1), alphas[:, :, None]).squeeze().T
-            )
-        ),
-        obs=obs,
-    )
+    if dimension > 1:
+        lik = pyro.sample(
+            "likelihood",
+            dist.Bernoulli(
+                gamma[None, :]
+                + (1.0 - gamma[None, :])
+                * sigmoid(
+                    torch.sum(alphas[None, :, :] * (thetas[:, None] - betas[None, :]).squeeze(), dim=-1)
+                    #alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
+                )
+            ),
+            obs=obs,
+        )
+    else:
+        lik = pyro.sample(
+            "likelihood",
+            dist.Bernoulli(
+                gamma[None, :]
+                + (1.0 - gamma[None, :])
+                * sigmoid(
+                    alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
+                )
+            ),
+            obs=obs,
+        )
 
     return lik
 
@@ -215,12 +230,12 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
         pyro.sample(
             "theta",
             dist.Normal(
-                pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models)),
+                pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
                 torch.exp(
                     pyro.param(
                         "t logstd",
                         torch.log(torch.tensor(theta_dist["param"]["std"]))
-                        * torch.ones(n_models),
+                        * torch.ones(n_models, dimension),
                     )
                 ),
             ),
@@ -229,12 +244,12 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
         pyro.sample(
             "theta",
             dist.LogNormal(
-                pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models)),
+                pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
                 torch.exp(
                     pyro.param(
                         "t logstd",
                         torch.log(torch.tensor(theta_dist["param"]["std"]))
-                        * torch.ones(n_models),
+                        * torch.ones(n_models, dimension),
                     )
                 ),
             ),
@@ -244,10 +259,10 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
             "theta",
             dist.Beta(
                 pyro.param(
-                    "t alpha", theta_dist["param"]["alpha"] * torch.ones(n_models)
+                    "t alpha", theta_dist["param"]["alpha"] * torch.ones(n_models, dimension)
                 ),
                 pyro.param(
-                    "t beta", theta_dist["param"]["beta"] * torch.ones(n_models)
+                    "t beta", theta_dist["param"]["beta"] * torch.ones(n_models, dimension)
                 ),
             ),
         )
@@ -479,7 +494,7 @@ def main(args):
         args.dimension
     )
 
-    _ = train(
+    elbo_train_loss = train(
         model,
         guide,
         combined_responses.to_numpy(),
@@ -496,9 +511,12 @@ def main(args):
     out_dir = args.out_dir if args.out_dir != "" else os.path.join(".", "output")
     exp_path = os.path.join(out_dir, exp_name)
     os.makedirs(exp_path, exist_ok=True)
-
+    print("last elbo: ", elbo_train_loss[-1])
+    print("elbo losses: ", elbo_train_loss)
     pyro.get_param_store().save(os.path.join(exp_path, "params.p"))
     combined_responses.to_pickle(os.path.join(exp_path, "responses.p"))
+    with open(os.path.join(exp_path, "train_elbo_losses.p"), 'wb') as f:
+        pickle.dump(elbo_train_loss, f)
     print(f"Saved parameters and responses for {exp_name} in\n{exp_path}")
 
 
@@ -598,7 +616,7 @@ if __name__ == "__main__":
         type=str,
     )
     parser.add_argument(
-        "--steps", default=500, help="number of training steps", type=int
+        "--steps", default=1500, help="number of training steps", type=int
     )
     parser.add_argument("--lr", default=1e-1, help="learning rate", type=float)
     parser.add_argument("--beta1", default=0.9, help="beta 1 for AdamW", type=float)

@@ -31,3 +31,4 @@ venv.bak/
 irt_scripts/plot_stats_pickles/*
 params*
 params*/*
+debugging_elbo/*

@@ -129,7 +129,6 @@ def irt_model(
                 + (1.0 - gamma[None, :])
                 * sigmoid(
                     torch.sum(alphas[None, :, :] * (thetas[:, None] - betas[None, :]).squeeze(), dim=-1)
-                    #alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
                 )
             ),
             obs=obs,
@@ -503,19 +502,6 @@ def main(args):
         weights=weights,
     )
 
-    import pdb; pdb.set_trace()
-    observed_data=torch.tensor(combined_responses.to_numpy()).float()
-    from pyro.infer import EmpiricalMarginal, Importance, Predictive
-
-    predictive = Predictive(model, guide=guide, num_samples=800,
-                        return_sites=("a", "b", "theta", "obs", "_RETURN"))
-    samples = predictive(observed_data)
-
-    importance = Importance(model, guide, num_samples=5000)
-    print("doing importance sampling...")
-    emp_marginal = EmpiricalMarginal(importance.run(observed_data))
-    marginal_samples = torch.stack([emp_marginal() for _ in range(10)])
-    
 
     # Save parameters and sampled responses
     if args.no_subsample:

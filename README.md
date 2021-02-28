@@ -38,3 +38,7 @@ bash irt_scripts/estimate_irt_params.sh
 The script will generate some parameters which will be store in the `params` directory. There are two files, `params.p` and `responses.p`.
 
 After that, you can run the same notebook to generate plots.
+
+
+##RUN COMMAND
+`python irt_scripts/multi_virt_v2.py --response_dir data --out_dir params_dim3 --seed 101 --discr 'lognormal' --ability 'normal' --discr_transform 'identity' --ability_transform 'identity' --datasets "snli,mnli" --sample_size 1500 --no_subsample --alpha_std 0.5 --item_param_std 1 --verbose --lr 0.0001 --steps 4000  --dimension 3`

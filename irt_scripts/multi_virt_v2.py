@@ -502,6 +502,7 @@ def main(args):
         args.dimension
     )
 
+
     elbo_train_loss = train(
         model,
         guide,
@@ -513,20 +514,32 @@ def main(args):
 
     # Importance Sampling
     observed_data = torch.tensor(combined_responses.to_numpy()).float()
-    posterior = Importance(model, guide=guide, num_samples=1000).run(observed_data)
+    posterior = Importance(model, guide=guide, num_samples=10).run(observed_data)
+
     marginals_a_b = EmpiricalMarginal(posterior, sites=['a', 'b'])
     marginals_logc = EmpiricalMarginal(posterior, sites=['log c'])
     marginals_theta = EmpiricalMarginal(posterior, sites=['theta'])
-    print("doing importance sampling...")
-    for i in range(500):
-        # Draw samples from marginal
-        a_list, b_list = marginals_a_b()
-        c_list = marginals_logc()
-        theta_list = marginals_theta()
-        print(a_list)
-        import pdb; pdb.set_trace()
 
+    print("doing importance sampling from empirical marginals")
+    # Draw samples from marginal
+    a_list, b_list = marginals_a_b()
+    c_list = sigmoid(marginals_logc().squeeze())
+    theta_list = marginals_theta().squeeze()
 
+    if args.dimension > 1:
+        prob = c_list[None, :] + (1.0 - c_list[None, :]) * sigmoid(torch.sum(a_list[None, :, :] * (theta_list[:, None] - b_list[None, :]).squeeze(), dim=-1))
+        lik = dist.Bernoulli(prob).sample()
+    else:
+        lik = dist.Bernoulli(
+                  gamma[None, :]
+                  + (1.0 - gamma[None, :])
+                  * sigmoid(
+                      alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
+                  )
+                )
+
+    maginal_lik = torch.log(prob).mean().item()
+    print("final marginal likelihood:", maginal_lik)
 
     # Save parameters and sampled responses
     if args.no_subsample:
@@ -542,7 +555,7 @@ def main(args):
     pyro.get_param_store().save(os.path.join(exp_path, "params.p"))
     combined_responses.to_pickle(os.path.join(exp_path, "responses.p"))
     with open(os.path.join(exp_path, "train_elbo_losses.p"), 'wb') as f:
-        pickle.dump(elbo_train_loss, f)
+        pickle.dump({"elbo_train_loss": elbo_train_loss, "maginal_lik": maginal_lik}, f)
     print(f"Saved parameters and responses for {exp_name} in\n{exp_path}")
 
 

@@ -11,6 +11,7 @@ import pyro.infer.mcmc
 import pyro.distributions as dist
 from tqdm.auto import tqdm
 from weighted_ELBO import Weighted_Trace_ELBO, WeightedSVI
+from pyro.infer import EmpiricalMarginal, Importance
 
 import os
 
@@ -128,7 +129,7 @@ def irt_model(
                 gamma[None, :]
                 + (1.0 - gamma[None, :])
                 * sigmoid(
-                    torch.sum(alphas[None, :, :] * (thetas[:, None] - betas[None, :]).squeeze(), dim=-1)
+                    1./np.sqrt(dimension) * torch.sum(alphas[None, :, :] * (thetas[:, None] - betas[None, :]).squeeze(), dim=-1)
                 )
             ),
             obs=obs,
@@ -172,14 +173,14 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
     pyro.sample(
         "b",
         dist.Normal(
-            pyro.param("b mu", torch.zeros(n_items, dimension)),
+            pyro.param("b mu", 0.01 * torch.randn(n_items,dimension) + torch.zeros(n_items, dimension)),
             torch.exp(pyro.param("b logstd", torch.zeros(n_items, dimension))),
         ),
     )
     pyro.sample(
         "log c",
         dist.Normal(
-            pyro.param("g mu", torch.zeros(n_items)),
+            pyro.param("g mu", 0.01 * torch.randn(n_items) + torch.zeros(n_items)),
             torch.exp(pyro.param("g logstd", torch.zeros(n_items))),
         ),
     )
@@ -188,7 +189,9 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
         pyro.sample(
             "a",
             dist.Normal(
-                pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
+                pyro.param("a mu", 
+                    0.01 * torch.randn(n_items, dimension) + 
+                    alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
                 torch.exp(
                     pyro.param(
                         "a logstd",
@@ -202,7 +205,9 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
         pyro.sample(
             "a",
             dist.LogNormal(
-                pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
+                pyro.param("a mu", 
+                    0.01 * torch.randn(n_items, dimension) + 
+                    alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
                 torch.exp(
                     pyro.param(
                         "a logstd",
@@ -229,7 +234,9 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
         pyro.sample(
             "theta",
             dist.Normal(
-                pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
+                pyro.param("t mu", 
+                    0.01 * torch.randn(n_models, dimension) + 
+                    theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
                 torch.exp(
                     pyro.param(
                         "t logstd",
@@ -243,7 +250,9 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
         pyro.sample(
             "theta",
             dist.LogNormal(
-                pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
+                pyro.param("t mu", 
+                    0.01 * torch.randn(n_models, dimension) + 
+                    theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
                 torch.exp(
                     pyro.param(
                         "t logstd",
@@ -502,6 +511,22 @@ def main(args):
         weights=weights,
     )
 
+    # Importance Sampling
+    observed_data = torch.tensor(combined_responses.to_numpy()).float()
+    posterior = Importance(model, guide=guide, num_samples=1000).run(observed_data)
+    marginals_a_b = EmpiricalMarginal(posterior, sites=['a', 'b'])
+    marginals_logc = EmpiricalMarginal(posterior, sites=['log c'])
+    marginals_theta = EmpiricalMarginal(posterior, sites=['theta'])
+    print("doing importance sampling...")
+    for i in range(500):
+        # Draw samples from marginal
+        a_list, b_list = marginals_a_b()
+        c_list = marginals_logc()
+        theta_list = marginals_theta()
+        print(a_list)
+        import pdb; pdb.set_trace()
+
+
 
     # Save parameters and sampled responses
     if args.no_subsample:
@@ -512,6 +537,7 @@ def main(args):
     exp_path = os.path.join(out_dir, exp_name)
     os.makedirs(exp_path, exist_ok=True)
     print("last elbo: ", elbo_train_loss[-1])
+    print("best elbo: ", np.min(elbo_train_loss))
     print("elbo losses: ", elbo_train_loss)
     pyro.get_param_store().save(os.path.join(exp_path, "params.p"))
     combined_responses.to_pickle(os.path.join(exp_path, "responses.p"))

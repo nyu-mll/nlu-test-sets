@@ -50,4 +50,5 @@ echo "$IN_DIR outdir: $OUT_DIR $alpha_std $item_std $dim"
    --item_param_std $item_std \
    --loss_type $loss_type \
    --lr $lr \
+   --out_dir $OUT_DIR/$logging_dir \
    --dimension $dim --verbose   >> $OUT_DIR/$logging_dir/log.log 2>&1

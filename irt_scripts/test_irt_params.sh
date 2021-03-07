@@ -15,11 +15,11 @@ SEED=101
 # here we use our best parameters used in the paper.
 # supported distributions: 'lognormal', 'beta', 'normal'
 DISTS=('lognormal')
-ALPH_STDS=( '0.20' '0.15' '0.25')
-PARAM_STDS=('1.0')
-LRS=( '0.01' '0.005' '0.001' '0.0005' )
+ALPH_STDS=( '0.20' '0.15' '0.25' '1' '10' )
+PARAM_STDS=('1.0' '10' '100' '1000' )
+LRS=( '0.01' '0.005' '0.001' '0.0005' '0.00001' )
 # DIMENSIONS=( 90 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 36 54 72)
-DIMENSIONS=( 1 2 3 15 36 54 72)
+DIMENSIONS=( 1 2 3 15 36 )
 #  list of tasks to analyze
 TASKS="boolq,cb,commonsenseqa,copa,cosmosqa,hellaswag,rte,snli,wic,qamr,arct,mcscript,mctaco,mutual,mutual-plus,quoref,socialiqa,squad-v2,wsc,mnli,mrqa-nq,newsqa,abductive-nli,arc-easy,arc-challenge,piqa,quail,winogrande"
 

@@ -346,7 +346,7 @@ def train(model, guide, data, optimizer, n_steps=500, weights=1, loss_type='weig
 
     if loss_type == 'weighted_elbo':
         print("Using weighted ELBO.")
-        print(f'Max Weight: {max(weights):.3f}\nMin Weight: {min(weights)::.3f}')
+        print(f'Max Weight: {max(weights):.3f}\nMin Weight: {min(weights):.3f}')
         svi_kernel = WeightedSVI(model, guide, optimizer, loss=Weighted_Trace_ELBO())
     elif loss_type == 'trace_elbo':
         print("Using weighted Trace ELBO.")
@@ -535,8 +535,8 @@ def main(args):
         exp_name = f"{args.lr}-alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
     else:
         exp_name = f"{args.lr}-alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_sample-{args.sample_size}_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
-    out_dir = args.out_dir if args.out_dir != "" else os.path.join(".", "output")
-    exp_path = os.path.join(out_dir, exp_name)
+    # out_dir = args.out_dir if args.out_dir != "" else os.path.join(".", "output")
+    exp_path = args.out_dir if args.out_dir != "" else os.path.join('.', 'output', exp_name)
     os.makedirs(exp_path, exist_ok=True)
     print("last elbo: ", elbo_train_loss[-1])
     print("elbo losses: ", elbo_train_loss)

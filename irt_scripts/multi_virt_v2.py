@@ -12,7 +12,9 @@ import pyro.distributions as dist
 from tqdm.auto import tqdm
 from weighted_ELBO import Weighted_Trace_ELBO, WeightedSVI
 from pyro.infer import EmpiricalMarginal, Importance
-
+from pyro.infer.abstract_infer import Marginals
+from IWELBO import RenyiELBO as ELBO
+from pyro.infer import SVI
 import os
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
@@ -338,7 +340,8 @@ def train(model, guide, data, optimizer, n_steps=500, weights=1):
     '''
     pyro.clear_param_store()
 
-    svi_kernel = WeightedSVI(model, guide, optimizer, loss=Weighted_Trace_ELBO())
+    svi_kernel = WeightedSVI(model, guide, optimizer, loss=Weighted_Trace_ELBO(num_particles=args.num_particles))
+    #svi_kernel = SVI(model, guide, optimizer, loss=ELBO(num_particles=20))
     loss_track = []
 
     # do gradient steps
@@ -346,6 +349,7 @@ def train(model, guide, data, optimizer, n_steps=500, weights=1):
     t = tqdm(range(n_steps), desc="elbo loss", miniters=1, disable=False)
     for step in t:
         elbo_loss = svi_kernel.step(weights, data_)
+        #elbo_loss = svi_kernel.step(data_)
         t.set_description(f"elbo loss = {elbo_loss:.2f}")
         loss_track.append(elbo_loss)
 
@@ -512,10 +516,25 @@ def main(args):
         weights=weights,
     )
 
+    """
+    X = torch.tensor(combined_responses.to_numpy()).float()
+    import pyro.poutine as poutine
+    log_weights = []
+    N=10
+    for i in range(N):
+        guide_trace = poutine.trace(guide).get_trace(X)
+        model_trace = poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(X)
+        log_weights.append(model_trace.log_prob_sum() - guide_trace.log_prob_sum())
+    import pdb; pdb.set_trace()
+    log_x = torch.logsumexp(torch.tensor(log_weights), dim=0) - torch.log(torch.tensor(float(N)))
+
+    
     # Importance Sampling
+
     observed_data = torch.tensor(combined_responses.to_numpy()).float()
     posterior = Importance(model, guide=guide, num_samples=10).run(observed_data)
 
+    #marginals = Marginals(posterior, sites=['a', 'b', 'log c', 'theta'])
     marginals_a_b = EmpiricalMarginal(posterior, sites=['a', 'b'])
     marginals_logc = EmpiricalMarginal(posterior, sites=['log c'])
     marginals_theta = EmpiricalMarginal(posterior, sites=['theta'])
@@ -525,21 +544,23 @@ def main(args):
     a_list, b_list = marginals_a_b()
     c_list = sigmoid(marginals_logc().squeeze())
     theta_list = marginals_theta().squeeze()
-
+    #a_list, b_list, c_list, theta_list = marginals()
+    #import pdb; pdb.set_trace()
     if args.dimension > 1:
         prob = c_list[None, :] + (1.0 - c_list[None, :]) * sigmoid(torch.sum(a_list[None, :, :] * (theta_list[:, None] - b_list[None, :]).squeeze(), dim=-1))
         lik = dist.Bernoulli(prob).sample()
     else:
         lik = dist.Bernoulli(
-                  gamma[None, :]
-                  + (1.0 - gamma[None, :])
+                  c_list[None, :]
+                  + (1.0 - c_list[None, :])
                   * sigmoid(
-                      alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
+                      a_list.T * (theta_list[:, None] - b_list[None, :]).squeeze()
                   )
                 )
 
-    maginal_lik = torch.log(prob).mean().item()
-    print("final marginal likelihood:", maginal_lik)
+    marginal_lik = torch.log(prob).mean().item()
+    print("final marginal likelihood:", marginal_lik)
+    """
 
     # Save parameters and sampled responses
     if args.no_subsample:
@@ -551,11 +572,11 @@ def main(args):
     os.makedirs(exp_path, exist_ok=True)
     print("last elbo: ", elbo_train_loss[-1])
     print("best elbo: ", np.min(elbo_train_loss))
-    print("elbo losses: ", elbo_train_loss)
     pyro.get_param_store().save(os.path.join(exp_path, "params.p"))
     combined_responses.to_pickle(os.path.join(exp_path, "responses.p"))
     with open(os.path.join(exp_path, "train_elbo_losses.p"), 'wb') as f:
-        pickle.dump({"elbo_train_loss": elbo_train_loss, "maginal_lik": maginal_lik}, f)
+        pickle.dump(elbo_train_loss, f)
+        #pickle.dump({"elbo_train_loss": elbo_train_loss, "maginal_lik": marginal_lik}, f)
     print(f"Saved parameters and responses for {exp_name} in\n{exp_path}")
 
 
@@ -635,6 +656,9 @@ if __name__ == "__main__":
         default="identity",
         help="ability (theta) transformation",
         choices=transform_choices,
+    )
+    parser.add_argument(
+        "--num_particles", default=1, type=int, help="ELBO sampling"
     )
 
     parser.add_argument(

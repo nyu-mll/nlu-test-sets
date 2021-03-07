@@ -119,11 +119,14 @@ class Weighted_Trace_ELBO(ELBO):
         """
         loss = 0.0
         # grab a trace from the generator
+        log_weights = []
         for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
+
 
             loss_particle, surrogate_loss_particle = self._differentiable_loss_particle(
                 model_trace, guide_trace, weights
             )
+            log_weights.append(loss_particle)
             loss += loss_particle / self.num_particles
 
             # collect parameters to train from model and guide
@@ -138,6 +141,10 @@ class Weighted_Trace_ELBO(ELBO):
             ):
                 surrogate_loss_particle = surrogate_loss_particle / self.num_particles
                 surrogate_loss_particle.backward(retain_graph=self.retain_graph)
+
+        #log_mean_weight = torch.logsumexp(torch.tensor(log_weights)) - torch.log(self.num_particles)
+        #elbo = log_mean_weight.sum().item()
+
         warn_if_nan(loss, "loss")
         return loss
 

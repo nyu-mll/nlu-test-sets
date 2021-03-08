@@ -137,16 +137,22 @@ def irt_model(
     ################################ DEBUG ################################################
     # assert False, f"debug {(thetas[:, None, :] - betas[None, :, :]).shape} | {alphas[None, :, :].shape}"
 
-    lik = pyro.sample(
-        "likelihood",
-        dist.Bernoulli(
-            gamma[None, :]
+    if dimension > 1:
+        prob = (gamma[None, :]
             + (1.0 - gamma[None, :])
             * sigmoid(
-                torch.sum(alphas[None, :, :] * (thetas[:, None, :] - betas[None, :, :]).squeeze(), dim=-1)
-                #alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
-            )
-        ),
+                torch.sum(alphas[None, :, :] * (thetas[:, None] - betas[None, :]).squeeze(), dim=-1)
+            ))
+    else:
+        betas = betas.squeeze()
+        gamma = gamma.squeeze()
+        alphas = alphas.squeeze()
+        thetas = thetas.squeeze()
+        prob = gamma[None, :] + (1.0 - gamma[None, :]) * sigmoid(alphas[None, :] * (thetas[:, None] - betas[None, :]))
+
+    lik = pyro.sample(
+        "likelihood",
+        dist.Bernoulli(prob),
         obs=obs,
     )
 
@@ -173,8 +179,7 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension=1):
     '''
     n_models, n_items = obs.shape[0], obs.shape[1]
 
-    # revisit, current initialization for multivariate covariance matrix has 1 on off diagonals because of torch.exp()
-    # std is now variance values
+    # logstd is now lower_triangular matrix of cholesky decomposition
 
     # log_cov_template = torch.tensor(np.fill_diagonal(float("-inf")*np.ones((dimension, dimension)), 1))
     log_cov_template = torch.eye(dimension)
@@ -183,7 +188,7 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension=1):
         "b",
         dist.MultivariateNormal(
             pyro.param("b mu", torch.zeros(n_items, dimension)),
-            scale_tril=torch.exp(pyro.param("b logstd", torch.stack([log_cov_template] * n_items))),
+            scale_tril=torch.tril(pyro.param("b logstd", torch.stack([log_cov_template] * n_items))),
         ),
     )
     pyro.sample(
@@ -199,10 +204,10 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension=1):
             "a",
             dist.MultivariateNormal(
                 pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
-                scale_tril=torch.exp(
+                scale_tril=torch.tril(
                     pyro.param(
                         "a logstd",
-                        torch.log(torch.tensor(alpha_dist["param"]["std"]))
+                        torch.tensor(alpha_dist["param"]["std"])
                         * torch.stack([log_cov_template] * n_items),
                     )
                 ),
@@ -240,10 +245,10 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension=1):
             "theta",
             dist.MultivariateNormal(
                 pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
-                scale_tril=torch.exp(
+                scale_tril=torch.tril(
                     pyro.param(
                         "t logstd",
-                        torch.log(torch.tensor(theta_dist["param"]["std"]))
+                        torch.tensor(theta_dist["param"]["std"])
                         * torch.stack([log_cov_template] * n_models),
                     )
                 ),
@@ -340,8 +345,11 @@ def train(model, guide, data, optimizer, n_steps=500, weights=1, loss_type='weig
     pyro.clear_param_store()
 
     if loss_type == 'weighted_elbo':
+        print("Using weighted ELBO.")
+        print(f'Max Weight: {max(weights):.3f}\nMin Weight: {min(weights):.3f}')
         svi_kernel = WeightedSVI(model, guide, optimizer, loss=Weighted_Trace_ELBO())
     elif loss_type == 'trace_elbo':
+        print("Using weighted Trace ELBO.")
         svi_kernel = SVI(model, guide, optimizer, loss=Trace_ELBO())
     else:
         raise TypeError(f"{loss_type} not supported.")
@@ -524,11 +532,11 @@ def main(args):
 
     # Save parameters and sampled responses
     if args.no_subsample:
-        exp_name = f"alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
+        exp_name = f"{args.lr}-alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
     else:
-        exp_name = f"alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_sample-{args.sample_size}_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
-    out_dir = args.out_dir if args.out_dir != "" else os.path.join(".", "output")
-    exp_path = os.path.join(out_dir, exp_name)
+        exp_name = f"{args.lr}-alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_sample-{args.sample_size}_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
+    # out_dir = args.out_dir if args.out_dir != "" else os.path.join(".", "output")
+    exp_path = args.out_dir if args.out_dir != "" else os.path.join('.', 'output', exp_name)
     os.makedirs(exp_path, exist_ok=True)
     print("last elbo: ", elbo_train_loss[-1])
     print("elbo losses: ", elbo_train_loss)

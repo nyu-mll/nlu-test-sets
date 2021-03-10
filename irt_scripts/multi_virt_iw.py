@@ -124,6 +124,7 @@ def irt_model(
     alphas = alpha_transform(alphas)
     thetas = theta_transform(thetas)
 
+<<<<<<< HEAD:irt_scripts/multi_virt_iw.py
     if dimension > 1:
         lik = pyro.sample(
             "likelihood",
@@ -149,6 +150,35 @@ def irt_model(
             ),
             obs=obs,
         )
+=======
+    if alpha_dist["name"] == "lognormal":
+        alphas = torch.exp(alphas)
+
+    if theta_dist["name"] == "lognormal":
+        thetas = torch.exp(thetas)
+
+    ################################ DEBUG ################################################
+    # assert False, f"debug {(thetas[:, None, :] - betas[None, :, :]).shape} | {alphas[None, :, :].shape}"
+
+    if dimension > 1:
+        prob = (gamma[None, :]
+            + (1.0 - gamma[None, :])
+            * sigmoid(
+                torch.sum(alphas[None, :, :] * (thetas[:, None] - betas[None, :]).squeeze(), dim=-1)
+            ))
+    else:
+        betas = betas.squeeze()
+        gamma = gamma.squeeze()
+        alphas = alphas.squeeze()
+        thetas = thetas.squeeze()
+        prob = gamma[None, :] + (1.0 - gamma[None, :]) * sigmoid(alphas[None, :] * (thetas[:, None] - betas[None, :]))
+
+    lik = pyro.sample(
+        "likelihood",
+        dist.Bernoulli(prob),
+        obs=obs,
+    )
+>>>>>>> f544d67d94d71cc782de21390d300b1f1f7a9498:mirt_analysis/multi_virt_v2.py
 
     return lik
 
@@ -173,11 +203,24 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
     '''
     n_models, n_items = obs.shape[0], obs.shape[1]
 
+<<<<<<< HEAD:irt_scripts/multi_virt_iw.py
     pyro.sample(
         "b",
         dist.Normal(
             pyro.param("b mu", 0.01 * torch.randn(n_items, dimension) + torch.zeros(n_items, dimension)),
             torch.exp(pyro.param("b logstd", torch.zeros(n_items, dimension))),
+=======
+    # logstd is now lower_triangular matrix of cholesky decomposition
+
+    # log_cov_template = torch.tensor(np.fill_diagonal(float("-inf")*np.ones((dimension, dimension)), 1))
+    log_cov_template = torch.eye(dimension)
+
+    pyro.sample(
+        "b",
+        dist.MultivariateNormal(
+            pyro.param("b mu", torch.zeros(n_items, dimension)),
+            scale_tril=torch.tril(pyro.param("b logstd", torch.stack([log_cov_template] * n_items))),
+>>>>>>> f544d67d94d71cc782de21390d300b1f1f7a9498:mirt_analysis/multi_virt_v2.py
         ),
     )
     pyro.sample(
@@ -207,6 +250,7 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
     elif alpha_dist["name"] == "lognormal":
         pyro.sample(
             "a",
+<<<<<<< HEAD:irt_scripts/multi_virt_iw.py
             dist.LogNormal(
                 pyro.param("a mu",
                            0.01 * torch.randn(n_items, dimension) +
@@ -216,6 +260,15 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
                         "a logstd",
                         torch.log(torch.tensor(alpha_dist["param"]["std"]))
                         * torch.ones(n_items, dimension),
+=======
+            dist.MultivariateNormal(
+                pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
+                scale_tril=torch.tril(
+                    pyro.param(
+                        "a logstd",
+                        torch.tensor(alpha_dist["param"]["std"])
+                        * torch.stack([log_cov_template] * n_items),
+>>>>>>> f544d67d94d71cc782de21390d300b1f1f7a9498:mirt_analysis/multi_virt_v2.py
                     )
                 ),
             ),
@@ -252,6 +305,7 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
     elif theta_dist["name"] == "lognormal":
         pyro.sample(
             "theta",
+<<<<<<< HEAD:irt_scripts/multi_virt_iw.py
             dist.LogNormal(
                 pyro.param("t mu",
                            0.01 * torch.randn(n_models, dimension) +
@@ -261,6 +315,15 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension):
                         "t logstd",
                         torch.log(torch.tensor(theta_dist["param"]["std"]))
                         * torch.ones(n_models, dimension),
+=======
+            dist.MultivariateNormal(
+                pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
+                scale_tril=torch.tril(
+                    pyro.param(
+                        "t logstd",
+                        torch.tensor(theta_dist["param"]["std"])
+                        * torch.stack([log_cov_template] * n_models),
+>>>>>>> f544d67d94d71cc782de21390d300b1f1f7a9498:mirt_analysis/multi_virt_v2.py
                     )
                 ),
             ),
@@ -341,8 +404,21 @@ def train(model, guide, data, optimizer, n_steps=500, weights=1):
     '''
     pyro.clear_param_store()
 
+<<<<<<< HEAD:irt_scripts/multi_virt_iw.py
     #svi_kernel = WeightedSVI(model, guide, optimizer, loss=Weighted_Trace_ELBO())
     svi_kernel = SVI(model, guide, optimizer, loss=ELBO(num_particles=20))
+=======
+    if loss_type == 'weighted_elbo':
+        print("Using weighted ELBO.")
+        print(f'Max Weight: {max(weights):.3f}\nMin Weight: {min(weights):.3f}')
+        svi_kernel = WeightedSVI(model, guide, optimizer, loss=Weighted_Trace_ELBO())
+    elif loss_type == 'trace_elbo':
+        print("Using weighted Trace ELBO.")
+        svi_kernel = SVI(model, guide, optimizer, loss=Trace_ELBO())
+    else:
+        raise TypeError(f"{loss_type} not supported.")
+
+>>>>>>> f544d67d94d71cc782de21390d300b1f1f7a9498:mirt_analysis/multi_virt_v2.py
     loss_track = []
 
     # do gradient steps
@@ -564,11 +640,11 @@ def main(args):
 
     # Save parameters and sampled responses
     if args.no_subsample:
-        exp_name = f"alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
+        exp_name = f"{args.lr}-alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
     else:
-        exp_name = f"alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_sample-{args.sample_size}_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
-    out_dir = args.out_dir if args.out_dir != "" else os.path.join(".", "output")
-    exp_path = os.path.join(out_dir, exp_name)
+        exp_name = f"{args.lr}-alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_sample-{args.sample_size}_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
+    # out_dir = args.out_dir if args.out_dir != "" else os.path.join(".", "output")
+    exp_path = args.out_dir if args.out_dir != "" else os.path.join('.', 'output', exp_name)
     os.makedirs(exp_path, exist_ok=True)
     print("last elbo: ", elbo_train_loss[-1])
     print("best elbo: ", np.min(elbo_train_loss))

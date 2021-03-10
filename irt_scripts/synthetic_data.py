@@ -9,486 +9,77 @@ import pyro
 import pyro.infer
 import pyro.infer.mcmc
 import pyro.distributions as dist
-from tqdm.auto import tqdm
-from weighted_ELBO import Weighted_Trace_ELBO, WeightedSVI
 
 import os
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-def sigmoid(x):
-    return 1.0 / (1.0 + torch.exp(-x))
-
-
-def irt_model(
-    obs,
-    alpha_dist,
-    theta_dist,
-    alpha_transform=lambda x: x,
-    theta_transform=lambda x: x,
-    item_params_std=1.0,
-    dimension = 1
-):
-    '''
-    3 parameter IRT model used for stochastic variational inference. The model is defined by the
-    distributions of the 3 item parameters (discrimination [a], difficulty [b], and
-    guessing [g]) and ability parameter [t].
-
-    The difficuly and log-guessing parameters follow Gaussian distributions with mean 0 and
-    standard deviation `item_params_std`. Discrimination and ability parameters follow distributions
-    defined by `alpha_dist` and `theta_dist`, respectively, followed by a transformation defined by
-    `alpha_transform` and `theta_transform`, respectively.
-
-    Args:
-        obs:             Numpy array of item responses.
-        alpha_dist:      {`name`: distribution_name, `param`: distribution_dict}
-                         Dictionary for the distribution type for the discrimation parameter [alpha].
-                         distribution_dict is a dictionary of distribution parameters necessary for the
-                         parameteric distribution defined by distribution_name.
-        theta_dist:      {`name`: distribution_name, `param`: distribution_dict}
-                         Dictionary for the distribution type for the ability parameter [theta].
-                         distribution_dict is a dictionary of distribution parameters necessary for the
-                         parameteric distribution defined by distribution_name.
-        alpha_transform: Transformation applied to the discrimination parameter [alpha].
-        theta_transform: Transformation aplied to the ability parameter [theta].
-        item_params_std: Standard deviation for difficulty and guessing parameters.
-
-    Returns:
-        lik:             the log-likelihood of item responses from obs given the
-                         estimated parameters.
-    '''
-    n_models, n_items = obs.shape[0], obs.shape[1]
-
-    betas = pyro.sample("b", dist.Normal(torch.zeros(n_items, dimension), item_params_std))
-    log_gamma = pyro.sample("log c", dist.Normal(torch.zeros(n_items), item_params_std))
-    gamma = sigmoid(log_gamma)
-
-    if alpha_dist["name"] == "normal":
-        alphas = pyro.sample(
-            "a",
-            dist.Normal(
-                alpha_dist["param"]["mu"] * torch.ones(n_items, dimension),
-                alpha_dist["param"]["std"],
-            ),
-        )
-    elif alpha_dist["name"] == "lognormal":
-        alphas = pyro.sample(
-            "a",
-            dist.LogNormal(
-                alpha_dist["param"]["mu"] * torch.ones(n_items, dimension),
-                alpha_dist["param"]["std"],
-            ),
-        )
-    elif alpha_dist["name"] == "beta":
-        alphas = pyro.sample(
-            "a",
-            dist.Beta(
-                alpha_dist["param"]["alpha"] * torch.ones(n_items, dimension),
-                alpha_dist["param"]["beta"] * torch.ones(n_items, dimension),
-            ),
-        )
-    else:
-        raise TypeError(f"Alpha distribution {alpha_dist['name']} not supported.")
-
-    if theta_dist["name"] == "normal":
-        thetas = pyro.sample(
-            "theta",
-            dist.Normal(
-                theta_dist["param"]["mu"] * torch.ones(n_models, dimension),
-                theta_dist["param"]["std"],
-            ),
-        )
-    elif theta_dist["name"] == "lognormal":
-        thetas = pyro.sample(
-            "theta",
-            dist.LogNormal(
-                theta_dist["param"]["mu"] * torch.ones(n_models, dimension),
-                theta_dist["param"]["std"],
-            ),
-        )
-    elif theta_dist["name"] == "beta":
-        thetas = pyro.sample(
-            "theta",
-            dist.Beta(
-                theta_dist["param"]["alpha"] * torch.ones(n_models, dimension),
-                theta_dist["param"]["beta"] * torch.ones(n_models, dimension),
-            ),
-        )
-    else:
-        raise TypeError(f"theta distribution {theta_dist['name']} not supported.")
-
-
-    alphas = alpha_transform(alphas)
-    thetas = theta_transform(thetas)
-
-    if dimension > 1:
-        lik = pyro.sample(
-            "likelihood",
-            dist.Bernoulli(
-                gamma[None, :]
-                + (1.0 - gamma[None, :])
-                * sigmoid(
-                    torch.sum(alphas[None, :, :] * (thetas[:, None] - betas[None, :]).squeeze(), dim=-1)
-                    #alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
-                )
-            ),
-            obs=obs,
-        )
-    else:
-        lik = pyro.sample(
-            "likelihood",
-            dist.Bernoulli(
-                gamma[None, :]
-                + (1.0 - gamma[None, :])
-                * sigmoid(
-                    alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
-                )
-            ),
-            obs=obs,
-        )
-    return lik
-
-
-def vi_posterior(obs, alpha_dist, theta_dist, dimension):
-    '''
-    3 parameter IRT guide used for stochastic variational inference in Pyro.
-
-    Difficulty [b] and log-guessing [log c] follow Gaussian distributions. Discrimination [a] and
-    ability [theta] follow distributions defined by `alpha_dist` and `theta_dist`, respectively.
-
-    Args:
-        obs:             Numpy array of item responses.
-        alpha_dist:      {`name`: distribution_name, `param`: distribution_dict}
-                         Dictionary for the distribution type for the discrimation parameter [alpha].
-                         distribution_dict is a dictionary of distribution parameters necessary for the
-                         parameteric distribution defined by distribution_name.
-        theta_dist:      {`name`: distribution_name, `param`: distribution_dict}
-                         Dictionary for the distribution type for the ability parameter [theta].
-                         distribution_dict is a dictionary of distribution parameters necessary for the
-                         parameteric distribution defined by distribution_name.
-    '''
-    n_models, n_items = obs.shape[0], obs.shape[1]
-
-    pyro.sample(
-        "b",
-        dist.Normal(
-            pyro.param("b mu", torch.zeros(n_items, dimension)),
-            torch.exp(pyro.param("b logstd", torch.zeros(n_items, dimension))),
-        ),
-    )
-    pyro.sample(
-        "log c",
-        dist.Normal(
-            pyro.param("g mu", torch.zeros(n_items)),
-            torch.exp(pyro.param("g logstd", torch.zeros(n_items))),
-        ),
-    )
-
-    if alpha_dist["name"] == "normal":
-        pyro.sample(
-            "a",
-            dist.Normal(
-                pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
-                torch.exp(
-                    pyro.param(
-                        "a logstd",
-                        torch.log(torch.tensor(alpha_dist["param"]["std"]))
-                        * torch.ones(n_items, dimension),
-                    )
-                ),
-            ),
-        )
-    elif alpha_dist["name"] == "lognormal":
-        pyro.sample(
-            "a",
-            dist.LogNormal(
-                pyro.param("a mu", alpha_dist["param"]["mu"] * torch.ones(n_items, dimension)),
-                torch.exp(
-                    pyro.param(
-                        "a logstd",
-                        torch.log(torch.tensor(alpha_dist["param"]["std"]))
-                        * torch.ones(n_items, dimension),
-                    )
-                ),
-            ),
-        )
-    elif alpha_dist["name"] == "beta":
-        pyro.sample(
-            "a",
-            dist.Beta(
-                pyro.param(
-                    "a alpha", alpha_dist["param"]["alpha"] * torch.ones(n_items, dimension)
-                ),
-                pyro.param("a beta", alpha_dist["param"]["beta"] * torch.ones(n_items, dimension)),
-            ),
-        )
-    else:
-        raise TypeError(f"Alpha distribution {alpha_dist['name']} not supported.")
-
-    if theta_dist["name"] == "normal":
-        pyro.sample(
-            "theta",
-            dist.Normal(
-                pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
-                torch.exp(
-                    pyro.param(
-                        "t logstd",
-                        torch.log(torch.tensor(theta_dist["param"]["std"]))
-                        * torch.ones(n_models, dimension),
-                    )
-                ),
-            ),
-        )
-    elif theta_dist["name"] == "lognormal":
-        pyro.sample(
-            "theta",
-            dist.LogNormal(
-                pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
-                torch.exp(
-                    pyro.param(
-                        "t logstd",
-                        torch.log(torch.tensor(theta_dist["param"]["std"]))
-                        * torch.ones(n_models, dimension),
-                    )
-                ),
-            ),
-        )
-    elif theta_dist["name"] == "beta":
-        pyro.sample(
-            "theta",
-            dist.Beta(
-                pyro.param(
-                    "t alpha", theta_dist["param"]["alpha"] * torch.ones(n_models, dimension)
-                ),
-                pyro.param(
-                    "t beta", theta_dist["param"]["beta"] * torch.ones(n_models, dimension)
-                ),
-            ),
-        )
-    else:
-        raise TypeError(f"Theta distribution {theta_dist['name']} not supported.")
-
-
-def get_model_guide(
-    alpha_dist, theta_dist, alpha_transform, theta_transform, item_param_std, dimension=1
-):
-    '''
-    Method to define 3 parameter IRT model and guide given specifications for item discrimination [alpha]
-    and responder ability [theta] parameter distributions and transfomations and standard deviations for item
-    difficulty [beta] and log-guessing [log gamma] Gaussian distributions.
-
-    Args:
-        alpha_dist:      {`name`: distribution_name, `param`: distribution_dict}
-                         Dictionary for the distribution type for the discrimation parameter [alpha].
-                         distribution_dict is a dictionary of distribution parameters necessary for the
-                         parameteric distribution defined by distribution_name.
-        theta_dist:      {`name`: distribution_name, `param`: distribution_dict}
-                         Dictionary for the distribution type for the ability parameter [theta].
-                         distribution_dict is a dictionary of distribution parameters necessary for the
-                         parameteric distribution defined by distribution_name.
-        alpha_transform: Transformation applied to the discrimination parameter [alpha].
-        theta_transform: Transformation aplied to the ability parameter [theta].
-        item_params_std: Standard deviation for difficulty and guessing parameters.
-
-    Returns:
-        model:           3 parameter IRT model used for stochastic variation inference in Pyro
-        guide:           3 parameter IRT guide used for stochastic variation inference in Pyro
-
-    '''
-    model = lambda obs: irt_model(
-        obs,
-        alpha_dist,
-        theta_dist,
-        alpha_transform=alpha_transform,
-        theta_transform=theta_transform,
-        item_params_std=item_param_std,
-        dimension=dimension,
-    )
-    guide = lambda obs: vi_posterior(obs, alpha_dist, theta_dist, dimension)
-
-    return model, guide
-
-
-def train(model, guide, data, optimizer, n_steps=500, weights=1):
-    '''
-    Method to fit 3 parameter IRT model parameters using stochastic variational inference.
-
-    The method uses a weighted ELBO, where each item parameter's log-likelihood is weighted by the
-    inverse of the item's dataset size. Use the default `weights=1` to use the standard ELBO.
-
-    Args:
-        model:      3 parameter IRT model
-        guide:      3 parameter IRT guide
-        data:       Numpy array of item responses
-        optimizer:  Optimizer to use for stochastic variational inference
-        n_steps:    Number of steps for fitting
-        weights:    Weights to use for the weighted ELBO
-
-    Returns:
-        loss_track: List of weighted ELBO losses during the parameter fitting
-    '''
-    pyro.clear_param_store()
-
-    svi_kernel = WeightedSVI(model, guide, optimizer, loss=Weighted_Trace_ELBO())
-    loss_track = []
-
-    # do gradient steps
-    data_ = torch.from_numpy(data.astype("float32"))
-    t = tqdm(range(n_steps), desc="elbo loss", miniters=1, disable=False)
-    for step in t:
-        elbo_loss = svi_kernel.step(weights, data_)
-        t.set_description(f"elbo loss = {elbo_loss:.2f}")
-        loss_track.append(elbo_loss)
-
-    return loss_track
-
-
-def get_response(file, ftype):
-    if ftype == "csv":
-        return pd.read_csv(file, index_col=0)
-    else:
-        raise KeyError(f"{ftype} reading not supported.")
-
-
-def get_distribution_params(distribution, verbose=False, std_overwrite=1.0):
-    if verbose:
-        print(f"Std Overwrite {std_overwrite:.2f}")
-
-    if distribution == "normal":
-        return {"mu": 0.0, "std": std_overwrite}
-    elif distribution == "lognormal":
-        return {"mu": 0.0, "std": std_overwrite}
-    elif distribution == "beta":
-        return {"alpha": 2.0, "beta": std_overwrite + 1}
-    else:
-        raise KeyError(f"Distribution type {distribution} not supported.")
-
-
-def get_transform(transform):
-    if transform == "identity":
-        return lambda x: x
-    elif transform == "positive":
-        return lambda x: torch.log(1 + torch.exp(x))
-    else:
-        raise KeyError(f"Distribution type {transform} not supported.")
-
-
 def set_seeds(seed):
-    pyro.clear_param_store()
     np.random.seed(seed)
     pyro.set_rng_seed(seed)
     torch.manual_seed(seed)
 
-
-def generate_responses(dimension):
-    n_models, n_items = 18, 1000
-    item_params_std = 1
-
-    alpha_dist = {"mu": 0.0, "std": 0.5}
-    theta_dist = {"mu": 0.0, "std": 1}
-
-    positive_transform = lambda x: torch.log(1 + torch.exp(x))
-
-    # Generate betas
-    betas = dist.Normal(torch.zeros(n_items, dimension), item_params_std).sample()
-
-    # Generate gamma
-    log_gamma = dist.Normal(torch.zeros(n_items), item_params_std).sample()
-    gamma = sigmoid(log_gamma)
-
-    # Generate alphas
-    alphas = dist.Normal(
-                    alpha_dist["mu"] * torch.ones(n_items, dimension),
-                    alpha_dist["std"],
-                ).sample()
-
-    # Generate thetas
-    thetas = dist.Normal(
-                    theta_dist["mu"] * torch.ones(n_models, dimension),
-                    theta_dist["std"],
-                ).sample()
-
-    #alphas = positive_transform(alphas)
-    #thetas = positive_transform(thetas)
-
-    if dimension > 1:
-        lik = dist.Bernoulli(
-                    gamma[None, :]
-                    + (1.0 - gamma[None, :])
-                    * sigmoid(
-                        torch.sum(alphas[None, :, :] * (thetas[:, None] - betas[None, :]).squeeze(), dim=-1)
-                        #alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
-                    )
-                ).sample()
-    else:
-        lik = dist.Bernoulli(
-                    gamma[None, :]
-                    + (1.0 - gamma[None, :])
-                    * sigmoid(
-                        alphas.T * (thetas[:, None] - betas[None, :]).squeeze()
-                    )
-                ).sample()
-
-    responses=lik
-
-    return responses, n_items
-
+def sigmoid(x):
+    return 1.0 / (1.0 + torch.exp(-x))
 
 def main(args):
     # Set seed
-
     set_seeds(args.seed)
 
-    responses, n_items = generate_responses(args.dimension)
-    weights = 1
+    # defining dataset sizes
+    n_models, n_items = 18, 1000
 
-    set_seeds(args.seed)
+    # define distribution parameters
+    alpha_dist = {"mu": 0.0, "std": args.alpha_std}
+    theta_dist = {"mu": 0.0, "std": args.item_param_std}
 
-    # Train model
-    adam_params = {"lr": args.lr, "betas": (args.beta1, args.beta2)}
-    optimizer = pyro.optim.AdamW(adam_params)
+    positive_transform = lambda x: torch.log(1 + torch.exp(x))
 
-    model, guide = get_model_guide(
-        {
-            "name": args.discr,
-            "param": get_distribution_params(
-                args.discr, verbose=args.verbose, std_overwrite=args.alpha_std
-            ),
-        },
-        {
-            "name": args.ability,
-            "param": get_distribution_params(args.ability, verbose=args.verbose),
-        },
-        get_transform(args.discr_transform),
-        get_transform(args.ability_transform),
-        args.item_param_std,
-        args.dimension
-    )
+    # Generate params
+    betas = pyro.sample("b", dist.Normal(torch.zeros(n_items, args.dimension), args.item_param_std))
+    log_gamma = pyro.sample("log c", dist.Normal(torch.zeros(n_items), args.item_param_std))
+    gamma = sigmoid(log_gamma)
 
-    elbo_train_loss = train(
-        model,
-        guide,
-        responses.numpy(),
-        optimizer,
-        n_steps=args.steps,
-        weights=weights,
-    )
+    alphas = pyro.sample("a",
+                dist.LogNormal(
+                    alpha_dist["mu"] * torch.ones(n_items, args.dimension),
+                    alpha_dist["std"],
+                ),
+            )
 
-    # Save parameters and sampled responses
-    if args.no_subsample:
-        exp_name = f"sync-alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
+    # Generate thetas
+    thetas = pyro.sample(
+                "theta",
+                dist.Normal(
+                    theta_dist["mu"] * torch.ones(n_models, args.dimension),
+                    theta_dist["std"],
+                ),
+            )
+
+    if args.dimension > 1:
+        lik = dist.Bernoulli(
+                    gamma[None, :]
+                    + (1.0 - gamma[None, :])
+                    * sigmoid(
+                        1./np.sqrt(args.dimension) * torch.sum(alphas[None, :, :] * (thetas[:, None] - betas[None, :]).squeeze(), dim=-1)
+                    )
+                ).sample()
     else:
-        exp_name = f"sync-alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_sample-{args.sample_size}_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
-    out_dir = args.out_dir if args.out_dir != "" else os.path.join(".", "output")
-    exp_path = os.path.join(out_dir, exp_name)
-    os.makedirs(exp_path, exist_ok=True)
-    print("last elbo: ", elbo_train_loss[-1])
-    print("elbo losses: ", elbo_train_loss)
-    pyro.get_param_store().save(os.path.join(exp_path, "params.p"))
-    #responses.to_pickle(os.path.join(exp_path, "responses.p"))
-    with open(os.path.join(exp_path, "train_elbo_losses.p"), 'wb') as f:
-        pickle.dump(elbo_train_loss, f)
-    print(f"Saved parameters and responses for {exp_name} in\n{exp_path}")
+        lik = dist.Bernoulli(
+            gamma[None, :]
+            + (1.0 - gamma[None, :])
+            * sigmoid(alphas[None, :] * (thetas[:, None] - betas[None, :]))
+        ).sample()
+
+    model_names = ["model_{}".format(i) for i in range(n_models)]
+    items_names = [f"data_d{args.dimension}_a{args.alpha_std:.2f}_t{args.item_param_std:.2f}_{i}" for i in range(n_items)]
+
+    df = pd.DataFrame(data=lik.numpy().astype(int),
+                      index=model_names,
+                      columns=items_names)
+    df.index.names = ['userid']
+    response_output=os.path.join(args.response_dir, f'sync_dim{args.dimension}_alpha-{args.discr}-{args.alpha_std:.2f}_theta-{args.ability}-{args.item_param_std:.2f}_irt_all_coded.csv')
+    df.to_csv(response_output)
 
 
 if __name__ == "__main__":
@@ -498,25 +89,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--response_dir", help="directory containing responses", required=True
     )
-
-    # Optional arguments
-    parser.add_argument("--out_dir", default="", help="output directory")
-    parser.add_argument(
-        "--no_subsample", action="store_true", help="whether not to subsample responses"
-    )
-    parser.add_argument(
-        "--sample_size",
-        default=-1,
-        help="number of items to sample per dataset, not used if --no_subsample is used.",
-        type=int,
-    )
-    parser.add_argument(
-        "--response_type", default="csv", help="response pattern file type", type=str
-    )
     parser.add_argument("--seed", default=42, help="random seed", type=int)
 
     # Distribution arguments
-    distribution_choices = ["normal", "lognormal", "beta"]
+    distribution_choices = ["normal", "lognormal", "beta", "multivariate_normal"]
     transform_choices = ["identity", "positive"]
 
     parser.add_argument(
@@ -527,7 +103,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--discr",
-        default="normal",
+        default="lognormal",
         help="discrimination (alpha) distribution",
         choices=distribution_choices,
     )
@@ -579,24 +155,7 @@ if __name__ == "__main__":
         help="standard deviation for beta, log_gamma",
     )
 
-    # Training arguments
-    parser.add_argument(
-        "--datasets",
-        default="",
-        help="comma separated string of datasets to include",
-        type=str,
-    )
-    parser.add_argument(
-        "--steps", default=500, help="number of training steps", type=int
-    )
-    parser.add_argument("--lr", default=1e-3, help="learning rate", type=float)
-    parser.add_argument("--beta1", default=0.9, help="beta 1 for AdamW", type=float)
-    parser.add_argument("--beta2", default=0.999, help="beta 2 for AdamW", type=float)
     parser.add_argument("--dimension", default=3, help="dimension of IRT", type=int)
-
-    parser.add_argument("--loss_type", default="weighted_elbo", help="which loss to optimize to", type=str)
-
-    # Tracking arguments
     parser.add_argument("--verbose", action="store_true", help="boolean for tracking")
 
     args = parser.parse_args()

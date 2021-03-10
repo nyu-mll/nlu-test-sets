@@ -142,9 +142,6 @@ class Weighted_Trace_ELBO(ELBO):
                 surrogate_loss_particle = surrogate_loss_particle / self.num_particles
                 surrogate_loss_particle.backward(retain_graph=self.retain_graph)
 
-        #log_mean_weight = torch.logsumexp(torch.tensor(log_weights)) - torch.log(self.num_particles)
-        #elbo = log_mean_weight.sum().item()
-
         warn_if_nan(loss, "loss")
         return loss
 

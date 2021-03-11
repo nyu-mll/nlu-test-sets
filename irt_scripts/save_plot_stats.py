@@ -29,10 +29,12 @@ sns.set(style="whitegrid")
 import sys
 dim = sys.argv[1]
 base_dir=sys.argv[2]
-file_name=f'alpha-lognormal-identity-dim{dim}_theta-normal-identity_nosubsample_1.00_0.15'
+saved_param_dir=sys.argv[3]
+file_name=sys.argv[4]
 print(file_name)
-repo = base_dir
-print("REPO: ", repo)
+
+exp_dir = os.path.join(base_dir, saved_param_dir, file_name)
+p = 0.95
 
 def sigmoid(x):
     return 1./(1.+torch.exp(-x))
@@ -255,16 +257,16 @@ def get_diff_by_set(diffs, item_ids):
     return diff_by_set, min_diff, max_diff
 
 
+"""
 datasets="boolq,cb,commonsenseqa,copa,cosmosqa,hellaswag,rte,snli,wic,qamr,arct,mcscript,mctaco,mutual,mutual-plus,quoref,socialiqa,squad-v2,wsc,mnli,mrqa-nq,newsqa,abductive-nli,arc-easy,arc-challenge,piqa,quail,winogrande,anli"
 data_names, responses, n_items = get_files(
-    os.path.join(repo, 'data'),
+    os.path.join(base_dir, 'data'),
     "csv",
     set(datasets.split(','))
 )
 task_metadata = pd.read_csv(os.path.join(base_dir,'irt_scripts','task_metadata.csv'))
 task_metadata.set_index("jiant_name", inplace=True)
 task_list = [x for x in task_metadata.index if x in data_names]
-
 
 total = 0
 task_name = []
@@ -282,11 +284,12 @@ task_name_format = pd.concat([task_name, task_format], axis=1)
 
 
 
-exp_dir = os.path.join(repo, 'params_mvirt', file_name)
-p = 0.95
+
 
 combined_responses = pd.read_pickle(os.path.join(exp_dir, 'responses.p')).reset_index()
-
+data, accuracies, example_accuracies = get_data_accuracies(combined_responses)
+column_names = combined_responses.columns[1:]
+"""
 
 print("Saving plot stats")
 load_from_cache = False
@@ -297,11 +300,7 @@ alpha_transf = 'standard'
 theta_dist = 'normal'
 theta_transf = 'standard'
 
-exp_dir = os.path.join(repo, 'params_mvirt', file_name)
 
-combined_responses = pd.read_pickle(os.path.join(exp_dir, 'responses.p')).reset_index()
-data, accuracies, example_accuracies = get_data_accuracies(combined_responses)
-column_names = combined_responses.columns[1:]
 select_ts = {
     'standard':lambda x:x,
     'positive':lambda x:torch.log(1+torch.exp(torch.tensor(x))),
@@ -337,6 +336,7 @@ else:
 
 
 print("saved plot stats in : ", plot_dir)
+
 
 
 

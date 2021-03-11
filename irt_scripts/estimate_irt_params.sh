@@ -5,49 +5,38 @@ BASE_DIR=$(pwd)
 echo "Base dir: $BASE_DIR"
 SCRIPT_DIR=${BASE_DIR}/irt_scripts
 
-IN_DIR=${BASE_DIR}/data
-OUT_DIR=${BASE_DIR}/params_mvirt
+IN_DIR=${BASE_DIR}/data_synthetic
+OUT_DIR=${BASE_DIR}/params_mvirt_sync
 SEED=101
 
 # adjust the following parameters according to chosen setup
 # here we use our best parameters used in the paper.
 # supported distributions: 'lognormal', 'beta', 'normal'
 DISTS=('lognormal')
-ALPH_STDS=( '0.20' '0.15' '0.25')
-PARAM_STDS=('1.0')
-DIMENSIONS=( 90 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 36 54 72)
+ALPH_STDS=( '0.2' '0.4' '1' '8')
+PARAM_STDS=('1.0' '2' '10')
+DIMENSIONS=( 1 2 3 4 5 6 7 8 ) ## 13 14 15 16 17 18 36 54 72)
+LR=(0.01) # 0.001 0.0001)
 #  list of tasks to analyze
-TASKS="boolq,cb,commonsenseqa,copa,cosmosqa,hellaswag,rte,snli,wic,qamr,arct,mcscript,mctaco,mutual,mutual-plus,quoref,socialiqa,squad-v2,wsc,mnli,mrqa-nq,newsqa,abductive-nli,arc-easy,arc-challenge,piqa,quail,winogrande"
+#TASKS="boolq,cb,commonsenseqa,copa,cosmosqa,hellaswag,rte,snli,wic,qamr,arct,mcscript,mctaco,mutual,mutual-plus,quoref,socialiqa,squad-v2,wsc,mnli,mrqa-nq,newsqa,abductive-nli,arc-easy,arc-challenge,piqa,quail,winogrande"
+TASKS="sync_dim3_alpha-lognormal-2.00_theta-normal-2.00,sync_dim3_alpha-lognormal-7.00_theta-normal-10.00"
 
 # if want to use sampling instead of all examples
 # not used if --no_subsample is specified
 sample_size=1500
 for alpha_std in "${ALPH_STDS[@]}"
 do
-    for dim in "${DIMENSIONS[@]}"
+    for lr in "${LR[@]}"
     do
-	for item_std in "${PARAM_STDS[@]}"
-	do
-            echo Alpha Std $alpha_std, Diff Guess Std $item_std
-	    ALPHA_TRANS=identity
-	    THETA_TRANS=identity
-            sbatch $BASE_DIR/sb_test.sbatch $IN_DIR $OUT_DIR $alpha_std $item_std $dim 
-            #sbatch $BASE_DIR/sb_test.sbatch 
-            #python \
-	    #	$SCRIPT_DIR/variational_irt.py \
-  	    #	--response_dir $IN_DIR \
-  	    #	--out_dir $OUT_DIR \
-  	    #	--seed $SEED \
-  	    #	--discr 'lognormal' \
-  	    #	--ability 'normal' \
-  	    # 	--discr_transform $ALPHA_TRANS \
-  	    # 	--ability_transform $THETA_TRANS \
-            #   --datasets $TASKS \
-            #   --sample_size $sample_size \
-            #   --no_subsample \
-            #   --alpha_std $alpha_std \
-            #   --item_param_std $item_std \
-            #   --verbose
-	done
+        for dim in "${DIMENSIONS[@]}"
+        do
+	    for item_std in "${PARAM_STDS[@]}"
+	    do
+                echo Alpha Std $alpha_std, Diff Guess Std $item_std
+	        ALPHA_TRANS=identity
+	        THETA_TRANS=identity
+                sbatch $BASE_DIR/sb_test.sbatch $IN_DIR $OUT_DIR $alpha_std $item_std $dim $lr 
+	    done
+        done
     done
 done

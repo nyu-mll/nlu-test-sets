@@ -16,6 +16,7 @@ from pyro.infer.abstract_infer import Marginals
 from IWELBO import RenyiELBO as ELBO
 from pyro.infer import SVI
 import os
+import sys
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
@@ -353,6 +354,9 @@ def train(model, guide, data, optimizer, n_steps=500, weights=1):
         t.set_description(f"elbo loss = {elbo_loss:.2f}")
         loss_track.append(elbo_loss)
 
+        if np.isnan(elbo_loss):
+            print("getting nan: ", loss_track) 
+            sys.exit(1)
     return loss_track
 
 
@@ -564,16 +568,17 @@ def main(args):
 
     # Save parameters and sampled responses
     if args.no_subsample:
-        exp_name = f"alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
+        exp_name = f"lr-{args.lr}-steps-${args.steps}-alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}_particles{args.num_particles}"
     else:
         exp_name = f"alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_sample-{args.sample_size}_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
     out_dir = args.out_dir if args.out_dir != "" else os.path.join(".", "output")
     exp_path = os.path.join(out_dir, exp_name)
     os.makedirs(exp_path, exist_ok=True)
+    print("tasks: ", args.datasets)
     print("last elbo: ", elbo_train_loss[-1])
     print("best elbo: ", np.min(elbo_train_loss))
     pyro.get_param_store().save(os.path.join(exp_path, "params.p"))
-    combined_responses.to_pickle(os.path.join(exp_path, "responses.p"))
+    #combined_responses.to_pickle(os.path.join(exp_path, "responses.p"))
     with open(os.path.join(exp_path, "train_elbo_losses.p"), 'wb') as f:
         pickle.dump(elbo_train_loss, f)
         #pickle.dump({"elbo_train_loss": elbo_train_loss, "maginal_lik": marginal_lik}, f)

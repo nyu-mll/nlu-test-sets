@@ -16,7 +16,7 @@
 #conda activate /misc/vlgscratch4/BowmanGroup/pmh330/miniconda3/envs/env_mvirt
 #TASKS="boolq,cb,commonsenseqa,copa,cosmosqa,hellaswag,rte,snli,wic,qamr,arct,mcscript,mctaco,mutual,mutual-plus,quoref,socialiqa,squad-v2,wsc,mnli,mrqa-nq,newsqa,abductive-nli,arc-easy,arc-challenge,piqa,quail,winogrande"
 #TASKS='snli'
-TASKS="sync_dim3_alpha-lognormal-2.00_theta-normal-2.00,sync_dim3_alpha-lognormal-7.00_theta-normal-10.00"
+TASKS="sync_dim3_mean0_alpha-lognormal-4.00_theta-normal-4.00,sync_dim3_mean10_alpha-lognormal-2.00_theta-normal-2.00"
 
 ALPHA_TRANS=identity
 THETA_TRANS=identity
@@ -28,7 +28,7 @@ alpha_std=$3
 item_std=$4
 dim=$5
 lr=$6
-steps=4000
+steps=5500
 
 logging_dir="lr-${lr}-steps-${steps}-alpha-${alpha_std}-${ALPHA_TRANS}-dim${dim}_theta-${normal}-${THETA_TRANS}_nosubsample_${item_std}_${alpha_std}"
 

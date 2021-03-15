@@ -29,15 +29,16 @@ def main(args):
     # defining dataset sizes
     n_models, n_items = 18, 1000
 
+    dist_mean = 0
     # define distribution parameters
-    alpha_dist = {"mu": 0.0, "std": args.alpha_std}
-    theta_dist = {"mu": 0.0, "std": args.item_param_std}
+    alpha_dist = {"mu": dist_mean, "std": args.alpha_std}
+    theta_dist = {"mu": dist_mean, "std": args.item_param_std}
 
     positive_transform = lambda x: torch.log(1 + torch.exp(x))
 
     # Generate params
-    betas = pyro.sample("b", dist.Normal(torch.zeros(n_items, args.dimension), args.item_param_std))
-    log_gamma = pyro.sample("log c", dist.Normal(torch.zeros(n_items), args.item_param_std))
+    betas = pyro.sample("b", dist.Normal(dist_mean * torch.ones(n_items, args.dimension), args.item_param_std))
+    log_gamma = pyro.sample("log c", dist.Normal(dist_mean * torch.ones(n_items), args.item_param_std))
     gamma = sigmoid(log_gamma)
 
     alphas = pyro.sample("a",
@@ -55,7 +56,6 @@ def main(args):
                     theta_dist["std"],
                 ),
             )
-
     if args.dimension > 1:
         lik = dist.Bernoulli(
                     gamma[None, :]
@@ -71,14 +71,26 @@ def main(args):
             * sigmoid(alphas[None, :] * (thetas[:, None] - betas[None, :]))
         ).sample()
 
+    
+
     model_names = ["model_{}".format(i) for i in range(n_models)]
-    items_names = [f"data_d{args.dimension}_a{args.alpha_std:.2f}_t{args.item_param_std:.2f}_{i}" for i in range(n_items)]
+    items_names = [f"data_d{args.dimension}_mean{dist_mean}_a{args.alpha_std:.2f}_t{args.item_param_std:.2f}_{i}" for i in range(n_items)]
 
     df = pd.DataFrame(data=lik.numpy().astype(int),
                       index=model_names,
                       columns=items_names)
     df.index.names = ['userid']
-    response_output=os.path.join(args.response_dir, f'sync_dim{args.dimension}_alpha-{args.discr}-{args.alpha_std:.2f}_theta-{args.ability}-{args.item_param_std:.2f}_irt_all_coded.csv')
+    
+    param_dict = {
+		    "a": alphas.numpy(),
+		    "b": betas.numpy(),
+		    "g": gamma.numpy(),
+                    "t": thetas.numpy()
+		}
+    with open(os.path.join(args.response_dir, f'params_sync_dim{args.dimension}_mean{dist_mean}_alpha-{args.discr}-{args.alpha_std:.2f}_theta-{args.ability}-{args.item_param_std:.2f}_irt_all_coded.p'), 'wb') as handle:
+        pickle.dump(param_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    
+    response_output=os.path.join(args.response_dir, f'sync_dim{args.dimension}_mean{dist_mean}_alpha-{args.discr}-{args.alpha_std:.2f}_theta-{args.ability}-{args.item_param_std:.2f}_irt_all_coded.csv')
     df.to_csv(response_output)
 
 

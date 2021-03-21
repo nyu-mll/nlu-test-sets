@@ -343,7 +343,7 @@ def train(model, guide, data, optimizer, n_steps=500, weights=1, loss_type='weig
         loss_track: List of weighted ELBO losses during the parameter fitting
     '''
     pyro.clear_param_store()
-
+    print("train loss type: ", loss_type)
     if loss_type == 'weighted_elbo':
         print("Using weighted ELBO.")
         print(f'Max Weight: {max(weights):.3f}\nMin Weight: {min(weights):.3f}')
@@ -488,7 +488,7 @@ def main(args):
     combined_responses = subsample_responses(
         responses, min_items, args.no_subsample, n_items, data_names
     )
-
+    import pdb; pdb.set_trace()
     if args.verbose:
         nl = "\n"
         tab = "\t"
@@ -521,6 +521,7 @@ def main(args):
         args.dimension
     )
 
+    print("loss type: ", args.loss_type)
     elbo_train_loss = train(
         model,
         guide,
@@ -528,6 +529,7 @@ def main(args):
         optimizer,
         n_steps=args.steps,
         weights=weights,
+        loss_type=args.loss_type
     )
 
     # Save parameters and sampled responses

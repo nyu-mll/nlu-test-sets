@@ -520,51 +520,6 @@ def main(args):
         weights=weights,
     )
 
-    """
-    X = torch.tensor(combined_responses.to_numpy()).float()
-    import pyro.poutine as poutine
-    log_weights = []
-    N=10
-    for i in range(N):
-        guide_trace = poutine.trace(guide).get_trace(X)
-        model_trace = poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(X)
-        log_weights.append(model_trace.log_prob_sum() - guide_trace.log_prob_sum())
-    import pdb; pdb.set_trace()
-    log_x = torch.logsumexp(torch.tensor(log_weights), dim=0) - torch.log(torch.tensor(float(N)))
-
-    
-    # Importance Sampling
-
-    observed_data = torch.tensor(combined_responses.to_numpy()).float()
-    posterior = Importance(model, guide=guide, num_samples=10).run(observed_data)
-
-    #marginals = Marginals(posterior, sites=['a', 'b', 'log c', 'theta'])
-    marginals_a_b = EmpiricalMarginal(posterior, sites=['a', 'b'])
-    marginals_logc = EmpiricalMarginal(posterior, sites=['log c'])
-    marginals_theta = EmpiricalMarginal(posterior, sites=['theta'])
-
-    print("doing importance sampling from empirical marginals")
-    # Draw samples from marginal
-    a_list, b_list = marginals_a_b()
-    c_list = sigmoid(marginals_logc().squeeze())
-    theta_list = marginals_theta().squeeze()
-    #a_list, b_list, c_list, theta_list = marginals()
-    #import pdb; pdb.set_trace()
-    if args.dimension > 1:
-        prob = c_list[None, :] + (1.0 - c_list[None, :]) * sigmoid(torch.sum(a_list[None, :, :] * (theta_list[:, None] - b_list[None, :]).squeeze(), dim=-1))
-        lik = dist.Bernoulli(prob).sample()
-    else:
-        lik = dist.Bernoulli(
-                  c_list[None, :]
-                  + (1.0 - c_list[None, :])
-                  * sigmoid(
-                      a_list.T * (theta_list[:, None] - b_list[None, :]).squeeze()
-                  )
-                )
-
-    marginal_lik = torch.log(prob).mean().item()
-    print("final marginal likelihood:", marginal_lik)
-    """
 
     # Save parameters and sampled responses
     if args.no_subsample:
@@ -675,7 +630,12 @@ if __name__ == "__main__":
         type=float,
         help="standard deviation for beta, log_gamma",
     )
-
+    parser.add_argument(
+        "--num_params",
+        default=3,
+        type=int,
+        help="1PL, 2PL, or 3PL model",
+    )
     # Training arguments
     parser.add_argument(
         "--datasets",

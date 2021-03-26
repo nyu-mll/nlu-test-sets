@@ -29,7 +29,8 @@ def irt_model(
     alpha_transform=lambda x: x,
     theta_transform=lambda x: x,
     item_params_std=1.0,
-    dimension = 1
+    dimension = 1,
+    num_factors=3
 ):
     '''
     3 parameter IRT model used for stochastic variational inference. The model is defined by the
@@ -67,10 +68,15 @@ def irt_model(
             torch.zeros(n_items, dimension),
             scale_tril=item_params_std*torch.stack([torch.eye(dimension)]*n_items))
     )
-    log_gamma = pyro.sample("log c", dist.Normal(torch.zeros(n_items), item_params_std))
-    gamma = sigmoid(log_gamma)
+    if num_factors >= 3:
+        log_gamma = pyro.sample("log c", dist.Normal(torch.zeros(n_items), item_params_std))
+        gamma = sigmoid(log_gamma)
+    else:
+        gamma = torch.ones(n_items) * 0.5
 
-    if alpha_dist["name"] == "normal" or alpha_dist["name"] == "lognormal":
+    if num_factors < 2:
+        alphas = torch.ones(n_items, dimension)
+    elif alpha_dist["name"] == "normal" or alpha_dist["name"] == "lognormal":
         alphas = pyro.sample(
             "a",
             dist.MultivariateNormal(
@@ -125,7 +131,8 @@ def irt_model(
         raise TypeError(f"theta distribution {theta_dist['name']} not supported.")
 
 
-    alphas = alpha_transform(alphas)
+    if num_factors > 2:
+        alphas = alpha_transform(alphas)
     thetas = theta_transform(thetas)
 
     if alpha_dist["name"] == "lognormal":
@@ -159,7 +166,7 @@ def irt_model(
     return lik
 
 
-def vi_posterior(obs, alpha_dist, theta_dist, dimension=1):
+def vi_posterior(obs, alpha_dist, theta_dist, dimension=1, num_factors=3):
     '''
     3 parameter IRT guide used for stochastic variational inference in Pyro.
 
@@ -191,15 +198,17 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension=1):
             scale_tril=torch.tril(pyro.param("b logstd", torch.stack([log_cov_template] * n_items))),
         ),
     )
-    pyro.sample(
-        "log c",
-        dist.Normal(
-            pyro.param("g mu", torch.zeros(n_items)),
-            torch.exp(pyro.param("g logstd", torch.zeros(n_items))),
-        ),
-    )
 
-    if alpha_dist["name"] == "normal" or alpha_dist["name"] == "lognormal":
+    if num_factors >= 3:
+        pyro.sample(
+            "log c",
+            dist.Normal(
+                pyro.param("g mu", torch.zeros(n_items)),
+                torch.exp(pyro.param("g logstd", torch.zeros(n_items))),
+            ),
+        )
+
+    if num_factors >= 2 and (alpha_dist["name"] == "normal" or alpha_dist["name"] == "lognormal"):
         pyro.sample(
             "a",
             dist.MultivariateNormal(
@@ -227,7 +236,7 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension=1):
     #             ),
     #         )),
     #     )
-    elif alpha_dist["name"] == "beta":
+    elif num_factors >= 2 and (alpha_dist["name"] == "beta"):
         pyro.sample(
             "a",
             dist.Beta(
@@ -237,7 +246,7 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension=1):
                 pyro.param("a beta", alpha_dist["param"]["beta"] * torch.ones(n_items, dimension)),
             ),
         )
-    else:
+    elif num_factors >= 2:
         raise TypeError(f"Alpha distribution {alpha_dist['name']} not supported.")
 
     if theta_dist["name"] == "normal" or theta_dist["name"] == "lognormal":
@@ -254,20 +263,7 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension=1):
                 ),
             ),
         )
-    # elif theta_dist["name"] == "lognormal":
-    #     pyro.sample(
-    #         "theta",
-    #         torch.exp(dist.LogNormal(
-    #             pyro.param("t mu", theta_dist["param"]["mu"] * torch.ones(n_models, dimension)),
-    #             scale_tril=torch.exp(
-    #                 pyro.param(
-    #                     "t logstd",
-    #                     torch.log(torch.tensor(theta_dist["param"]["std"]))
-    #                     * torch.stack([log_cov_template] * n_models),
-    #                 )
-    #             ),
-    #         )),
-    #     )
+
     elif theta_dist["name"] == "beta":
         pyro.sample(
             "theta",
@@ -285,7 +281,7 @@ def vi_posterior(obs, alpha_dist, theta_dist, dimension=1):
 
 
 def get_model_guide(
-    alpha_dist, theta_dist, alpha_transform, theta_transform, item_param_std, dimension=1
+    alpha_dist, theta_dist, alpha_transform, theta_transform, item_param_std, dimension=1, num_factors=3
 ):
     '''
     Method to define 3 parameter IRT model and guide given specifications for item discrimination [alpha]
@@ -318,6 +314,7 @@ def get_model_guide(
         theta_transform=theta_transform,
         item_params_std=item_param_std,
         dimension=dimension,
+        num_factors=num_factors
     )
     guide = lambda obs: vi_posterior(obs, alpha_dist, theta_dist, dimension=dimension)
 
@@ -534,9 +531,9 @@ def main(args):
 
     # Save parameters and sampled responses
     if args.no_subsample:
-        exp_name = f"{args.lr}-alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
+        exp_name = f"{args.lr}-num_factors-${args.num_factors}_alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_nosubsample_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
     else:
-        exp_name = f"{args.lr}-alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_sample-{args.sample_size}_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
+        exp_name = f"{args.lr}-num_factors-${args.num_factors}alpha-{args.discr}-{args.discr_transform}-dim{args.dimension}_theta-{args.ability}-{args.ability_transform}_sample-{args.sample_size}_{args.item_param_std:.2f}_{args.alpha_std:.2f}"
     # out_dir = args.out_dir if args.out_dir != "" else os.path.join(".", "output")
     exp_path = args.out_dir if args.out_dir != "" else os.path.join('.', 'output', exp_name)
     os.makedirs(exp_path, exist_ok=True)
@@ -555,6 +552,10 @@ if __name__ == "__main__":
     # Required arguments
     parser.add_argument(
         "--response_dir", help="directory containing responses", required=True
+    )
+
+    parser.add_argument(
+        "--num_factors", help="number of factors in model", default=3, type=int
     )
 
     # Optional arguments

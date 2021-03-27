@@ -150,9 +150,9 @@ class RenyiELBO(ELBO):
 
             # compute elbo and surrogate elbo
             for name, site in model_trace.nodes.items():
-
+                print("model sample: ", name)
                 if site["type"] == "sample":
-                    print(name)
+                    print("model sample: ", name)
                     if name in ["theta", "likelihood"]: continue
                     log_prob_sum = torch_sum(site["log_prob"], sum_dims)
                     #import pdb; pdb.set_trace()
@@ -192,10 +192,10 @@ class RenyiELBO(ELBO):
                     for i in range(len(elbo_particles)):
                         elbo_particles[i] = torch.zeros_like(tensor_holder)
                         surrogate_elbo_particles[i] = torch.zeros_like(tensor_holder)
-            ##import pdb; pdb.set_trace()
+            #import pdb; pdb.set_trace()
             elbo_particles.append(elbo_particle)
             surrogate_elbo_particles.append(surrogate_elbo_particle)
-        import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
         if tensor_holder is None:
             return 0.
 

@@ -24,3 +24,9 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+.idea/
+
+# plot_stats
+irt_scripts/plot_stats_pickles*
+params_*

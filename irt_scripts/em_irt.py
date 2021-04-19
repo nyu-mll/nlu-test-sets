@@ -6,8 +6,15 @@ import torch
 from torch.distributions.bernoulli import Bernoulli
 from variational_irt import get_files, set_seeds, subsample_responses
 
+
+def write_pickle(file, fname, out_dir):
+    with open(os.path.join(out_dir, fname), 'wb') as f:
+        pickle.dump(file, f)
+
+
 def sigmoid(x):
     return 1/(1+torch.exp(-x))
+
 
 def probfunc(theta, itemparams):
     # calculates probabilites using model abilities and item parameters
@@ -33,12 +40,14 @@ def probfunc(theta, itemparams):
     else:
         raise KeyError(f'{nparams} not supported')
 
+
 def get_nll(responses, thetas, itemparams):
     probs = probfunc(thetas, itemparams).T
     # import pdb; pdb.set_trace()
 
     rv = Bernoulli(probs)
     return -rv.log_prob(responses).sum()
+
 
 def sgd(responses, thetas, itemparams, steps, lr=0.1, mode='e', return_losses=False):
     if mode =='e':
@@ -60,8 +69,10 @@ def sgd(responses, thetas, itemparams, steps, lr=0.1, mode='e', return_losses=Fa
     if return_losses:
         return losses
 
+
 def fit_em_irt(
         responses,
+        device,
         max_steps=1000,
         tol=1e-14,
         ntol=5,
@@ -76,10 +87,13 @@ def fit_em_irt(
 
     nresp, nitems = responses.shape
 
-    thetas = torch.normal(0, init_scale, (nresp, ndims), requires_grad=True)
-    itemparams = torch.normal(0, init_scale, (nitems, nparams, ndims), requires_grad=True)
+    if verbose:
+        print(f'Using device {device}')
 
-    losses = []
+    thetas = torch.normal(0, init_scale, (nresp, ndims), requires_grad=True, device=device)
+    itemparams = torch.normal(0, init_scale, (nitems, nparams, ndims), requires_grad=True, device=device)
+
+    losses = [get_nll(responses, thetas, itemparams).cpu()]
     tol_count, steps = 0, 0
     while tol_count < ntol and steps < max_steps:
         prev_thetas, prev_itemparams = thetas.clone(), itemparams.clone()
@@ -91,7 +105,7 @@ def fit_em_irt(
         sgd(responses, thetas, itemparams, sgd_steps, mode='m')
 
         losses.append(
-            get_nll(responses, thetas, itemparams)
+            get_nll(responses, thetas, itemparams).cpu()
         )
 
         # increment tolerance count if not above `tol`
@@ -106,13 +120,12 @@ def fit_em_irt(
         if verbose and steps % verbose_steps == 0:
             print(f'Step {steps}')
 
+    if verbose:
+        print(f'Finished in {steps} steps.')
+
     orders = ['a', 'b', 'g']
 
-    return thetas, itemparams, orders[:nparams], losses
-
-def write_pickle(file, fname, out_dir):
-    with open(os.path.join(out_dir, fname), 'wb') as f:
-        pickle.dump(file, f)
+    return thetas.cpu(), itemparams.cpu(), orders[:nparams], losses
 
 def main(args):
     # Set seed
@@ -132,8 +145,11 @@ def main(args):
         responses, min_items, args.no_subsample, n_items, data_names
     )
 
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
     thetas, itemparams, order, losses = fit_em_irt(
-        torch.tensor(combined_responses.to_numpy(dtype="float32")),
+        torch.tensor(combined_responses.to_numpy(dtype="float32")).to(device),
+        device,
         max_steps=args.max_steps,
         ndims=args.ndims,
         init_scale=args.init_scale,
@@ -169,9 +185,9 @@ if __name__ == "__main__":
         "--response_type", default="csv", help="response pattern file type", type=str
     )
 
-    parser.add_argument('--max_steps', default=1000, help='maximum number of EM steps')
-    parser.add_argument('--ndims', default=1, help='number of dimensions')
-    parser.add_argument('--init_scale', default=100, help='number of dimensions')
+    parser.add_argument('--max_steps', default=1000, help='maximum number of EM steps', type=int)
+    parser.add_argument('--ndims', default=1, help='number of dimensions', type=int)
+    parser.add_argument('--init_scale', default=10, help='number of dimensions', type=int)
 
     parser.add_argument("--seed", default=42, help="random seed", type=int)
     parser.add_argument(

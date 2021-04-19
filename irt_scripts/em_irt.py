@@ -30,11 +30,10 @@ def probfunc(theta, itemparams):
         # 2PL
         a = itemparams[:, 0, :]
         b = itemparams[:, 1, :]
-
         return sigmoid(
             torch.matmul(
-                a,
-                (b - theta[None, :, :]).transpose(2, 1) # nitems x ndims x nresp
+                a[:, None, :],
+                (b[:, None, :] - theta[None, :, :]).transpose(2, 1) # nitems x ndims x nresp
             )
         ).squeeze()
     else:
@@ -43,8 +42,6 @@ def probfunc(theta, itemparams):
 
 def get_nll(responses, thetas, itemparams):
     probs = probfunc(thetas, itemparams).T
-    # import pdb; pdb.set_trace()
-
     rv = Bernoulli(probs)
     return -rv.log_prob(responses).sum()
 
@@ -79,6 +76,7 @@ def fit_em_irt(
         ndims=1,
         nparams=1,
         sgd_steps=50,
+        sgd_lr=0.01,
         init_scale=1e2,
         verbose=False,
         verbose_steps=50,
@@ -93,19 +91,19 @@ def fit_em_irt(
     thetas = torch.normal(0, init_scale, (nresp, ndims), requires_grad=True, device=device)
     itemparams = torch.normal(0, init_scale, (nitems, nparams, ndims), requires_grad=True, device=device)
 
-    losses = [get_nll(responses, thetas, itemparams).cpu()]
+    losses = [get_nll(responses, thetas, itemparams).cpu().item()]
     tol_count, steps = 0, 0
     while tol_count < ntol and steps < max_steps:
         prev_thetas, prev_itemparams = thetas.clone(), itemparams.clone()
 
         # E step SGD
-        sgd(responses, thetas, itemparams, sgd_steps, mode='e')
+        sgd(responses, thetas, itemparams, sgd_steps, lr=sgd_lr, mode='e')
 
         # M step SGD
-        sgd(responses, thetas, itemparams, sgd_steps, mode='m')
+        sgd(responses, thetas, itemparams, sgd_steps, lr=sgd_lr, mode='m')
 
         losses.append(
-            get_nll(responses, thetas, itemparams).cpu()
+            get_nll(responses, thetas, itemparams).cpu().item()
         )
 
         # increment tolerance count if not above `tol`
@@ -125,7 +123,7 @@ def fit_em_irt(
 
     orders = ['a', 'b', 'g']
 
-    return thetas.cpu(), itemparams.cpu(), orders[:nparams], losses
+    return thetas.cpu(), itemparams.cpu(), orders[:nparams+1], losses
 
 def main(args):
     # Set seed
@@ -150,10 +148,12 @@ def main(args):
     thetas, itemparams, order, losses = fit_em_irt(
         torch.tensor(combined_responses.to_numpy(dtype="float32")).to(device),
         device,
+        nparams=args.nparams,
         max_steps=args.max_steps,
         ndims=args.ndims,
         init_scale=args.init_scale,
         verbose=args.verbose,
+        sgd_lr=args.lr,
     )
 
     out_dir = os.path.join('.', args.out_dir) if args.out_dir == 'test_params' else args.out_dir
@@ -188,6 +188,8 @@ if __name__ == "__main__":
     parser.add_argument('--max_steps', default=1000, help='maximum number of EM steps', type=int)
     parser.add_argument('--ndims', default=1, help='number of dimensions', type=int)
     parser.add_argument('--init_scale', default=10, help='number of dimensions', type=int)
+    parser.add_argument('--lr', default=0.01, help='optimizer learning rate', type=float)
+    parser.add_argument('--nparams', default=1, help='optimizer learning rate', type=int)
 
     parser.add_argument("--seed", default=42, help="random seed", type=int)
     parser.add_argument(

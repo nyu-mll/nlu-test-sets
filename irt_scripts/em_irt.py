@@ -4,6 +4,7 @@ import pickle
 
 import torch
 from torch.distributions.bernoulli import Bernoulli
+from torch.nn.utils import clip_grad_norm_
 from variational_irt import get_files, set_seeds, subsample_responses
 
 
@@ -46,7 +47,7 @@ def get_nll(responses, thetas, itemparams):
     return -rv.log_prob(responses).sum()
 
 
-def sgd(responses, thetas, itemparams, steps, lr=0.1, mode='e', return_losses=False):
+def sgd(responses, thetas, itemparams, steps, lr=0.1, mode='e', gradnorm=0, return_losses=False):
     opt_params = None
     if mode =='e':
         opt_params = [thetas]
@@ -63,6 +64,11 @@ def sgd(responses, thetas, itemparams, steps, lr=0.1, mode='e', return_losses=Fa
         loss = get_nll(responses, thetas, itemparams)
         losses.append(loss)
         loss.backward()
+
+        # gradient clipping if enabled
+        if gradnorm > 0:
+            clip_grad_norm_(opt_params, gradnorm)
+
         optimizer.step()
 
     if return_losses:
@@ -82,6 +88,7 @@ def fit_em_irt(
         init_scale=1e2,
         verbose=False,
         verbose_steps=50,
+        gradnorm=0,
 ):
     # EM algorithm for fitting IRT
 
@@ -99,10 +106,10 @@ def fit_em_irt(
         prev_thetas, prev_itemparams = thetas.clone(), itemparams.clone()
 
         # E step SGD
-        sgd(responses, thetas, itemparams, sgd_steps, lr=sgd_lr, mode='e')
+        sgd(responses, thetas, itemparams, sgd_steps, lr=sgd_lr, mode='e', gradnorm=gradnorm)
 
         # M step SGD
-        sgd(responses, thetas, itemparams, sgd_steps, lr=sgd_lr, mode='m')
+        sgd(responses, thetas, itemparams, sgd_steps, lr=sgd_lr, mode='m', gradnorm=gradnorm)
 
         losses.append(
             get_nll(responses, thetas, itemparams).cpu().item()
@@ -125,7 +132,7 @@ def fit_em_irt(
 
     orders = ['a', 'b', 'g']
 
-    return thetas.cpu(), itemparams.cpu(), orders[:nparams+1], losses
+    return thetas.cpu(), itemparams.cpu(), orders[:nparams], losses
 
 def main(args):
     # Set seed
@@ -156,6 +163,7 @@ def main(args):
         init_scale=args.init_scale,
         verbose=args.verbose,
         sgd_lr=args.lr,
+        gradnorm=args.gradnorm,
     )
 
     out_dir = os.path.join('.', args.out_dir) if args.out_dir == 'test_params' else args.out_dir
@@ -192,6 +200,7 @@ if __name__ == "__main__":
     parser.add_argument('--init_scale', default=10, help='number of dimensions', type=int)
     parser.add_argument('--lr', default=0.01, help='optimizer learning rate', type=float)
     parser.add_argument('--nparams', default=1, help='optimizer learning rate', type=int)
+    parser.add_argument('--gradnorm', default=0, help='gradient norm for clipping', type=float)
 
     parser.add_argument("--seed", default=42, help="random seed", type=int)
     parser.add_argument(

@@ -4,7 +4,7 @@ import pickle
 
 import torch
 from torch.distributions.bernoulli import Bernoulli
-from variational_irt import get_files, set_seeds
+from variational_irt import get_files, set_seeds, subsample_responses
 
 def sigmoid(x):
     return 1/(1+torch.exp(-x))
@@ -33,11 +33,18 @@ def probfunc(theta, itemparams):
     else:
         raise KeyError(f'{nparams} not supported')
 
+def get_nll(responses, thetas, itemparams):
+    probs = probfunc(thetas, itemparams).T
+    # import pdb; pdb.set_trace()
+
+    rv = Bernoulli(probs)
+    return -rv.log_prob(responses).sum()
+
 def sgd(responses, thetas, itemparams, steps, lr=0.1, mode='e', return_losses=False):
     if mode =='e':
-        optimizer = torch.optim.SGD(thetas, lr=lr)
+        optimizer = torch.optim.SGD([thetas], lr=lr)
     elif mode =='m':
-        optimizer = torch.optim.SGD(itemparams, lr=lr)
+        optimizer = torch.optim.SGD([itemparams], lr=lr)
     else:
         raise KeyError(f'Mode {mode} not supported.')
 
@@ -45,9 +52,7 @@ def sgd(responses, thetas, itemparams, steps, lr=0.1, mode='e', return_losses=Fa
     for s in range(steps):
 
         optimizer.zero_grad()
-        probs = probfunc(thetas, itemparams)
-        rv = Bernoulli(probs)
-        loss = -rv.log_prob(responses)
+        loss = get_nll(responses, thetas, itemparams)
         losses.append(loss)
         loss.backward()
         optimizer.step()
@@ -62,16 +67,19 @@ def fit_em_irt(
         ntol=5,
         ndims=1,
         nparams=1,
-        sgd_steps=500,
+        sgd_steps=50,
         init_scale=1e2,
+        verbose=False,
+        verbose_steps=50,
 ):
     # EM algorithm for fitting IRT
 
     nresp, nitems = responses.shape
 
-    thetas = torch.randn((nresp, ndims))*init_scale
-    itemparams = torch.randn((nitems, nparams, ndims))*init_scale
+    thetas = torch.normal(0, init_scale, (nresp, ndims), requires_grad=True)
+    itemparams = torch.normal(0, init_scale, (nitems, nparams, ndims), requires_grad=True)
 
+    losses = []
     tol_count, steps = 0, 0
     while tol_count < ntol and steps < max_steps:
         prev_thetas, prev_itemparams = thetas.clone(), itemparams.clone()
@@ -82,18 +90,25 @@ def fit_em_irt(
         # M step SGD
         sgd(responses, thetas, itemparams, sgd_steps, mode='m')
 
+        losses.append(
+            get_nll(responses, thetas, itemparams)
+        )
+
         # increment tolerance count if not above `tol`
         if max(
-                torch.norm(prev_thetas - thetas, p='inf'),
-                torch.norm(prev_itemparams, itemparams, p='inf')
+                torch.norm(prev_thetas - thetas, p=float('inf')),
+                torch.norm(prev_itemparams - itemparams, p=float('inf')),
         ) < tol:
             tol_count += 1
 
         steps += 1
 
+        if verbose and steps % verbose_steps == 0:
+            print(f'Step {steps}')
+
     orders = ['a', 'b', 'g']
 
-    return thetas, itemparams, orders[:nparams]
+    return thetas, itemparams, orders[:nparams], losses
 
 def write_pickle(file, fname, out_dir):
     with open(os.path.join(out_dir, fname), 'wb') as f:
@@ -111,8 +126,18 @@ def main(args):
         verbose=args.verbose,
     )
 
-    thetas, itemparams, order = fit_em_irt(
-        responses
+    # Sample items
+    min_items = min(n_items) if args.sample_size == -1 else args.sample_size
+    combined_responses = subsample_responses(
+        responses, min_items, args.no_subsample, n_items, data_names
+    )
+
+    thetas, itemparams, order, losses = fit_em_irt(
+        torch.tensor(combined_responses.to_numpy(dtype="float32")),
+        max_steps=args.max_steps,
+        ndims=args.ndims,
+        init_scale=args.init_scale,
+        verbose=args.verbose,
     )
 
     out_dir = os.path.join('.', args.out_dir) if args.out_dir == 'test_params' else args.out_dir
@@ -121,6 +146,7 @@ def main(args):
     write_pickle(thetas, 'thetas.p', out_dir)
     write_pickle(itemparams, 'item_params.p', out_dir)
     write_pickle(order, 'params_order.p', out_dir)
+    write_pickle(losses, 'losses.p', out_dir)
 
     if args.verbose:
         print(
@@ -142,12 +168,27 @@ if __name__ == "__main__":
     parser.add_argument(
         "--response_type", default="csv", help="response pattern file type", type=str
     )
+
+    parser.add_argument('--max_steps', default=1000, help='maximum number of EM steps')
+    parser.add_argument('--ndims', default=1, help='number of dimensions')
+    parser.add_argument('--init_scale', default=100, help='number of dimensions')
+
     parser.add_argument("--seed", default=42, help="random seed", type=int)
     parser.add_argument(
         "--datasets",
         default="",
         help="comma separated string of datasets to include",
         type=str,
+    )
+
+    parser.add_argument(
+        "--no_subsample", action="store_true", help="whether not to subsample responses"
+    )
+    parser.add_argument(
+        "--sample_size",
+        default=-1,
+        help="number of items to sample per dataset, not used if --no_subsample is used.",
+        type=int,
     )
 
     parser.add_argument("--verbose", action="store_true", help="boolean for tracking")

@@ -47,13 +47,15 @@ def get_nll(responses, thetas, itemparams):
 
 
 def sgd(responses, thetas, itemparams, steps, lr=0.1, mode='e', return_losses=False):
+    opt_params = None
     if mode =='e':
-        optimizer = torch.optim.SGD([thetas], lr=lr)
+        opt_params = [thetas]
     elif mode =='m':
-        optimizer = torch.optim.SGD([itemparams], lr=lr)
+        opt_params = [itemparams]
     else:
         raise KeyError(f'Mode {mode} not supported.')
 
+    optimizer = torch.optim.SGD(opt_params, lr=lr)
     losses = []
     for s in range(steps):
 

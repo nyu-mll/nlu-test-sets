@@ -1,6 +1,7 @@
 import argparse
 import os
 import pickle
+import sys
 
 import torch
 from torch.distributions.bernoulli import Bernoulli
@@ -59,6 +60,10 @@ def sgd(responses, thetas, itemparams, steps, lr=0.1, mode='e', gradnorm=0, retu
     optimizer = torch.optim.SGD(opt_params, lr=lr)
     losses = []
     for s in range(steps):
+
+        if torch.isnan(thetas):
+            print('Encountered NaN')
+            sys.exit(1)
 
         optimizer.zero_grad()
         loss = get_nll(responses, thetas, itemparams)

@@ -3,7 +3,7 @@
 #SBATCH --job-name=mvirt
 #SBATCH --output=sl_vi_en_1011.out
 #SBATCH --error=sl_zh_en_1011.err
-#SBATCH --time=6:00:00
+#SBATCH --time=24:00:00
 #SBATCH --nodes=1
 #SBATCH --mem=40GB
 #SBATCH --mail-user=pmh330@nyu.edu
@@ -15,8 +15,7 @@
 
 #conda activate /misc/vlgscratch4/BowmanGroup/pmh330/miniconda3/envs/env_mvirt
 #TASKS="boolq,cb,commonsenseqa,copa,cosmosqa,hellaswag,rte,snli,wic,qamr,arct,mcscript,mctaco,mutual,mutual-plus,quoref,socialiqa,squad-v2,wsc,mnli,mrqa-nq,newsqa,abductive-nli,arc-easy,arc-challenge,piqa,quail,winogrande"
-#TASKS='snli'
-TASKS="sync_dim3_mean0_alpha-lognormal-4.00_theta-normal-4.00,sync_dim3_mean10_alpha-lognormal-2.00_theta-normal-2.00"
+TASKS='sync_varied_dim3_diffskills'
 
 ALPHA_TRANS=identity
 THETA_TRANS=identity
@@ -32,7 +31,7 @@ steps=5500
 num_factors=3
 alpha_discr=$7
 
-logging_dir="lr-${lr}-steps-${steps}-alpha-${alpha_std}-${ALPHA_TRANS}-dim${dim}_theta-${normal}-${THETA_TRANS}_nosubsample_${item_std}_${alpha_std}"
+logging_dir="lr-${lr}-steps-${steps}-num_factors-${num_factors}-alpha-${alpha_discr}-${ALPHA_TRANS}-dim${dim}_theta-normal-${THETA_TRANS}_nosubsample_${item_std}_${alpha_std}_particles16"
 
 mkdir -p $OUT_DIR/$logging_dir
 echo "starting" >> $OUT_DIR/$logging_dir/log.log 2>&1
@@ -43,7 +42,7 @@ echo "$IN_DIR outdir: $OUT_DIR $alpha_std $item_std $dim"
     --response_dir $IN_DIR \
     --out_dir $OUT_DIR \
     --seed $SEED \
-    --discr 'lognormal' \
+    --discr ${alpha_discr} \
     --ability 'normal' \
     --discr_transform $ALPHA_TRANS \
     --ability_transform $THETA_TRANS \
@@ -54,4 +53,5 @@ echo "$IN_DIR outdir: $OUT_DIR $alpha_std $item_std $dim"
    --item_param_std $item_std \
    --lr $lr --steps $steps \
    --num_particles 8 \
+   --num_factors ${num_factors} \
    --dimension $dim --verbose   >> $OUT_DIR/$logging_dir/log.log 2>&1

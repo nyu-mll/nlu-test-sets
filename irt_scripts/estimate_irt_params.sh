@@ -1,21 +1,20 @@
 # BASE_DIR=/Users/phumon/Documents/Research/
-BASE_DIR=//Users/claravania/Projects
-# BASE_DIR=/scratch/wh629/research/irt/irt_script
-SCRIPT_DIR=${BASE_DIR}/nlu-test-sets/irt_scripts
+BASE_DIR=$(pwd)
+SCRIPT_DIR=${BASE_DIR}/irt_scripts
 
-IN_DIR=${BASE_DIR}/nlu-test-sets/data
-OUT_DIR=${BASE_DIR}/nlu-test-sets/params_anli
+IN_DIR=${BASE_DIR}/data
+OUT_DIR=${BASE_DIR}/params
 SEED=101
 
 # adjust the following parameters according to chosen setup
 # here we use our best parameters used in the paper.
 # supported distributions: 'lognormal', 'beta', 'normal'
 DISTS=('lognormal')
-ALPH_STDS=('0.30')
+ALPH_STDS=('0.3')
 PARAM_STDS=('1.0')
 
 #  list of tasks to analyze
-TASKS="boolq,cb,commonsenseqa,copa,cosmosqa,hellaswag,rte,snli,wic,qamr,arct,mcscript,mctaco,mutual,mutual-plus,quoref,socialiqa,squad-v2,wsc,mnli,mrqa-nq,newsqa,abductive-nli,arc-easy,arc-challenge,piqa,quail,winogrande,adversarial-nli"
+TASKS="boolq,cb,commonsenseqa,copa,cosmosqa,hellaswag,rte,snli,wic,qamr,arct,mcscript,mctaco,mutual,mutual-plus,quoref,socialiqa,squad_v2,wsc,mnli,mrqa-nq,newsqa,abductive-nli,arc-easy,arc-challenge,piqa,quail,winogrande,adversarial-nli"
 
 # if want to use sampling instead of all examples
 # not used if --no_subsample is specified

@@ -48,7 +48,7 @@ for s in split:
 
 		test_data = {"version": "v2.0", 
 					"data": test_examples}
-		json.dump(dev_data, ftest, ensure_ascii=False)
+		json.dump(test_data, ftest, ensure_ascii=False)
 
 		fdev.close()
 		ftest.close()

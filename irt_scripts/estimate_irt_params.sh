@@ -1,10 +1,10 @@
 # BASE_DIR=/Users/phumon/Documents/Research/
-BASE_DIR=//Users/claravania/Projects
+BASE_DIR=$(pwd)
 # BASE_DIR=/scratch/wh629/research/irt/irt_script
-SCRIPT_DIR=${BASE_DIR}/nlu-test-sets/irt_scripts
+SCRIPT_DIR=${BASE_DIR}/irt_scripts
 
-IN_DIR=${BASE_DIR}/nlu-test-sets/data
-OUT_DIR=${BASE_DIR}/nlu-test-sets/params
+IN_DIR=${BASE_DIR}/data
+OUT_DIR=${BASE_DIR}/params
 SEED=101
 
 # adjust the following parameters according to chosen setup

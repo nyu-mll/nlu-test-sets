@@ -25,6 +25,6 @@ mutual-plus,MuTual+,MC-par,2020
 quail,QuAIL,MC-par,2020
 qamr,QAMR,span selection,2018
 newsqa,NewsQA,span selection,2017
-squad-v2,SQuAD2.0,span selection,2018
+squad_v2,SQuAD2.0,span selection,2018
 mrqa-nq,MRQA-NQ,span selection,2019
 quoref,Quoref,span selection,2019

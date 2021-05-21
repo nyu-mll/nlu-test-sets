@@ -25,11 +25,11 @@ ENV/
 env.bak/
 venv.bak/
 
-.idea/
-
 # plot_stats
-irt_scripts/plot_stats_pickles*
-
+irt_scripts/plot_stats_pickles_*
 diff_skills/
 
+# misc
+.idea/
+irt_scripts/*
 params_*

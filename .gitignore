@@ -24,3 +24,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# misc
+.idea/
+irt_scripts/*
+params_*

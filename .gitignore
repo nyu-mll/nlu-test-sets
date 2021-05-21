@@ -29,4 +29,7 @@ venv.bak/
 
 # plot_stats
 irt_scripts/plot_stats_pickles*
+
+diff_skills/
+
 params_*

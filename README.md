@@ -17,7 +17,7 @@ pip install -r requirements.txt
 
 ## IRT Analysis
 
-The `data` directory contains model responses for the 28 datasets described in the paper. The `params` directory consists of estimated parameters based on the model responses. You can then simply run the `plot_virt.ipynb` to generate some plots.
+The `data` directory contains model responses for the 29 datasets described in the paper. The `params` directory consists of estimated parameters based on the model responses. You can then simply run the `plot_virt.ipynb` to generate some plots.
 
 
 ## Analyzing New Test Set(s)

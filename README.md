@@ -1,6 +1,6 @@
 # Comparing Test Sets with IRT
 
-This is a repository for the paper "Quoref is Still Effective, SNLI is Not: Comparing Test Sets with Item Response Theory".
+This is a repository for the paper ["Comparing Test Sets with Item Response Theory"](https://arxiv.org/abs/2106.00840), to appear at ACL 2021.
 
 ## Requirements
 

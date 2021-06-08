@@ -1,6 +1,6 @@
 # Comparing Test Sets with IRT
 
-This is a repository for the paper "Quoref is Still Effective, SNLI is Not: Comparing Test Sets with Item Response Theory".
+This is a repository for the paper ["Comparing Test Sets with Item Response Theory"](https://arxiv.org/abs/2106.00840), to appear at ACL 2021.
 
 ## Requirements
 
@@ -17,7 +17,7 @@ pip install -r requirements.txt
 
 ## IRT Analysis
 
-The `data` directory contains model responses for the 28 datasets described in the paper. The `params` directory consists of estimated parameters based on the model responses. You can then simply run the `plot_virt.ipynb` to generate some plots.
+The `data` directory contains model responses for the 29 datasets described in the paper. The `params` directory consists of estimated parameters based on the model responses. You can then simply run the `plot_virt.ipynb` to generate some plots.
 
 
 ## Analyzing New Test Set(s)

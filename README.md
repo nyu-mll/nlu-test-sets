@@ -4,7 +4,7 @@ This is a repository for the paper ["Comparing Test Sets with Item Response Theo
 
 ## Requirements
 
-For training the models and generating new model responses using `jiant` (we use v2.1.1), please refer to the related [README](https://github.com/nyu-mll/nlu-test-sets/blob/main/README_models.md).
+For training the models and generating new model responses using `jiant` (we use v2.1.1), please refer to the related [README](https://github.com/nyu-mll/nlu-test-sets/blob/main/jiant_scripts/README.md).
 
 For IRT analysis, use Python 3 (we use Python 3.7) and install the required packages.
 
